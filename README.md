@@ -8,10 +8,10 @@ Abra la carpeta `public` con **Live Server** de VS Code o cualquier servidor est
 
 Accesos de demostración:
 
-| Rol | Usuario | Contraseña |
-| --- | --- | --- |
-| Directora | `directora` | `Directora123!` |
-| Administración y Caja | `caja` | `Caja12345!` |
+| Rol                   | Usuario     | Contraseña      |
+| --------------------- | ----------- | --------------- |
+| Directora             | `directora` | `Directora123!` |
+| Administración y Caja | `caja`      | `Caja12345!`    |
 
 La aplicación inicia sin estudiantes ni pagos ficticios. Puede registrar estudiantes, responsables, prematrículas, matrículas, documentos, mensualidades, abonos y descuentos; también permite imprimir comprobantes y estados de cuenta.
 
