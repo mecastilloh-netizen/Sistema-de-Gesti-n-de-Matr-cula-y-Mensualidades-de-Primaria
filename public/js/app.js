@@ -1,4 +1,4 @@
-﻿import {
+import {
   api,
   fmtDate,
   money,
@@ -12,6 +12,7 @@
   notify,
   confirmAction,
 } from "./api.js";
+import { chartBarPercent, findCashStudents } from "./ui-utils.js";
 
 const app = document.querySelector("#app");
 const state = {
@@ -23,6 +24,7 @@ const state = {
   students: [],
   loading: false,
 };
+const shortMonths = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const nav = [
   ["dashboard", "Inicio", "house"],
   ["students", "Estudiantes", "users-round"],
@@ -43,7 +45,7 @@ const yearSelect = (all = false) =>
     state.year,
   );
 const tabs = (items, current, action) =>
-  `<div class="task-tabs" aria-label="Secciones">${items.map(([key, label]) => actionButton(action, label, "chevron-right", key === current ? "primary" : "outline", `data-tab="${key}" aria-pressed="${key === current}"`)).join("")}</div>`;
+  `<div class="task-tabs nav nav-pills gap-2" role="group" aria-label="Secciones">${items.map(([key, label]) => `<button type="button" class="nav-link app-tab ${key === current ? "active" : ""}" data-action="${action}" data-tab="${key}" aria-pressed="${key === current}">${icon("chevron-right", 16)} ${label}</button>`).join("")}</div>`;
 const field = (
   label,
   name,
@@ -52,9 +54,10 @@ const field = (
   required = true,
   extra = "",
 ) =>
-  /* HTML */ `<label class="field"
-    ><span>${label}${required ? " <b>*</b>" : ""}</span
+  /* HTML */ `<label class="field col-12 col-md-6"
+    ><span class="form-label">${label}${required ? " <b>*</b>" : ""}</span
     ><input
+      class="form-control"
       name="${name}"
       type="${type}"
       value="${h(value)}"
@@ -62,9 +65,9 @@ const field = (
       ${extra}
   /></label>`;
 const select = (label, name, values, selected, required = true) =>
-  /* HTML */ `<label class="field"
-    ><span>${label}${required ? " <b>*</b>" : ""}</span
-    ><select name="${name}" ${required ? "required" : ""}>
+  /* HTML */ `<label class="field col-12 col-md-6"
+    ><span class="form-label">${label}${required ? " <b>*</b>" : ""}</span
+    ><select class="form-select" name="${name}" ${required ? "required" : ""}>
       ${values.map((v) => option(v[0], v[1], selected)).join("")}
     </select></label
   >`;
@@ -89,16 +92,16 @@ const studentOptions = () => [
 ];
 const statusBadge = (text) =>
   /* HTML */ `<span
-    class="badge ${text === "Pagado" ||
+    class="badge rounded-pill status-badge ${text === "Pagado" ||
     text === "Entregado" ||
     text === "Activa" ||
     text === "Válido"
-      ? "success"
+      ? "text-bg-success"
       : text === "Anulado"
-        ? "danger"
+        ? "text-bg-danger"
         : text === "Abono"
-          ? "info"
-          : "warning"}"
+          ? "text-bg-info"
+          : "text-bg-warning"}"
     >${h(text)}</span
   >`;
 const empty = (title, description) =>
@@ -116,21 +119,18 @@ const pageTitle = (title, sub, crumb = title) =>
     </div>
   </div>`;
 const card = (title, iconName, content, right = "") =>
-  /* HTML */ `<section class="card">
-    <div class="card-head">
+  /* HTML */ `<section class="card app-card shadow-sm mb-3">
+    <div class="card-header app-card-header bg-white d-flex align-items-center gap-2">
       <span class="icon-disc">${icon(iconName, 23)}</span>
-      <h2>${title}</h2>
+      <h2 class="h5 mb-0 flex-grow-1">${title}</h2>
       ${right}
     </div>
+    <div class="card-body">
     ${content}
+    </div>
   </section>`;
 const actionButton = (action, label, iconName, cls = "primary", attrs = "") =>
-  /* HTML */ `<button
-    type="button"
-    class="btn ${cls}"
-    data-action="${action}"
-    ${attrs}
-  >
+  /* HTML */ `<button type="button" class="btn app-action ${cls.split(" ").map((name) => ({ primary: "btn-primary", outline: "btn-outline-primary", quiet: "btn-light text-secondary", "danger-btn": "btn-outline-danger", small: "btn-sm", wide: "w-100" })[name] || name).join(" ")}" data-action="${action}" ${attrs}>
     ${icon(iconName, 18)} ${label}
   </button>`;
 const monthLabel = (n) => (n ? months[n - 1] : "—");
@@ -144,7 +144,8 @@ function renderShell(content) {
     .map(
       ([id, label, ico]) =>
         /* HTML */ `<button
-          class="nav-link ${state.page === id ||
+          type="button"
+          class="nav-link app-nav-link ${state.page === id ||
           (id === "students" &&
             ["enrollments", "documents", "account"].includes(state.page))
             ? "active"
@@ -155,7 +156,7 @@ function renderShell(content) {
         </button>`,
     )
     .join("");
-  app.innerHTML = /* HTML */ `<header class="topbar">
+  app.innerHTML = /* HTML */ `<header class="topbar navbar bg-white sticky-top shadow-sm px-3 px-lg-4">
       <div class="brand">
         <div class="brand-mark">🏫</div>
         <div>
@@ -184,11 +185,11 @@ function renderShell(content) {
         </div>
       </div>
     </header>
-    <div class="layout">
-      <aside class="sidebar">
-        <nav>${links}</nav>
+    <div class="layout row g-0">
+      <aside class="sidebar col-12 col-lg-2">
+        <nav class="nav nav-pills flex-row flex-lg-column flex-nowrap" aria-label="Navegación principal">${links}</nav>
       </aside>
-      <main id="main">${content}</main>
+      <main id="main" class="col-12 col-lg-10 container-fluid">${content}</main>
     </div>`;
   icons();
   configureInputs();
@@ -235,13 +236,13 @@ function login() {
           </p>
           <form id="login-form">
             <label class="input-icon"
-              >${icon("user-round", 20)}<input
+              >${icon("user-round", 20)}<input class="form-control"
                 name="username"
                 placeholder="Usuario"
                 required
                 autocomplete="username" /></label
             ><label class="input-icon"
-              >${icon("lock-keyhole", 20)}<input
+              >${icon("lock-keyhole", 20)}<input class="form-control"
                 name="password"
                 placeholder="Contraseña"
                 type="password"
@@ -254,7 +255,7 @@ function login() {
               >
                 ${icon("eye-off", 19)}
               </button></label
-            ><button class="btn primary wide" type="submit">
+            ><button class="btn btn-primary app-action w-100" type="submit">
               Iniciar sesión ${icon("arrow-right", 19)}
             </button>
           </form>
@@ -347,7 +348,7 @@ async function dashboard() {
       "Inicio",
       "Resumen operativo del año lectivo seleccionado.",
     )}
-    <div class="page-tools">
+    <div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2">
       ${yearSelect()}${actionButton(
         "new-student",
         "Registrar estudiante",
@@ -357,21 +358,22 @@ async function dashboard() {
         "Abrir expediente",
         "search",
         "outline",
-      )}<button class="btn primary" data-page="payments">Registrar pago</button
-      ><button class="btn outline" data-page="reports">Reportes</button>
+      )}<button class="btn btn-primary app-action" data-page="payments">Registrar pago</button
+      ><button class="btn btn-outline-primary app-action" data-page="reports">Reportes</button>
     </div>
-    <div class="stats">
+    <div class="stats row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3">
       ${stats
         .map(
           ([label, value, ico, color]) =>
-            /* HTML */ `<div class="stat card">
+            /* HTML */ `<div class="stat card app-stat shadow-sm h-100">
               <span class="stat-icon ${color}">${icon(ico, 27)}</span>
               <div><span>${label}</span><strong>${value}</strong></div>
             </div>`,
         )
         .join("")}
     </div>
-    <div class="dashboard-grid">
+    <div class="dashboard-grid row g-3">
+      <div class="col-12 col-xl-7">
       ${card(
         `Recepción ${state.year} · cargos ${state.year} · C$`,
         "chart-no-axes-column",
@@ -381,7 +383,7 @@ async function dashboard() {
                 .map(
                   (b, i) =>
                     /* HTML */ `<div class="bar-cell">
-                      <small class="bar-month">${months[i]}</small><div class="bar-track"><div class="bar" style="--bar:${Math.round((b / max) * 100)}%" title="${months[i]}: ${money(b)}"></div></div><small class="bar-value">${money(b)}</small>
+                      <small class="bar-month" aria-label="${months[i]}" title="${months[i]}">${shortMonths[i]}</small><div class="bar-track"><div class="bar" style="--bar:${chartBarPercent(b, max)}%" title="${months[i]}: ${money(b)}"></div></div><small class="bar-value">${money(b)}</small>
                     </div>`,
                 )
                 .join("")}
@@ -390,7 +392,10 @@ async function dashboard() {
               "Sin pagos recibidos",
               "No hay pagos recibidos en este año para sus cargos lectivos.",
             ),
-      )}${card(
+      )}
+      </div>
+      <div class="col-12 col-xl-5">
+      ${card(
         "Actividad reciente · todos los períodos",
         "clock-3",
         d.activity.length
@@ -412,6 +417,7 @@ async function dashboard() {
               "Las acciones registradas aparecerán aquí.",
             ),
       )}
+      </div>
     </div> `;
 }
 
@@ -424,7 +430,7 @@ function studentForm(student = {}, guardians = [{}]) {
     ${card(
       "Datos del estudiante",
       "user-round",
-      /* HTML */ `<div class="form-grid">
+      /* HTML */ `<div class="form-grid row g-3">
         ${field("Nombres", "names", student.names)}${field(
           "Apellidos",
           "surnames",
@@ -445,7 +451,7 @@ function studentForm(student = {}, guardians = [{}]) {
           ],
           student.sex,
         )}
-        <div class="span-2">
+        <div class="col-12">
           ${field("Dirección", "address", student.address)}
         </div>
         ${select(
@@ -482,7 +488,7 @@ function studentForm(student = {}, guardians = [{}]) {
         )}`,
     )}
     <div class="form-actions">
-      <button class="btn primary" type="submit">
+      <button class="btn btn-primary app-action" type="submit">
         ${icon("save", 18)} Guardar estudiante</button
       >${actionButton("cancel-student", "Cancelar", "x", "quiet")}
     </div>
@@ -495,7 +501,7 @@ function guardianFields(g = {}, i = 0) {
         ? actionButton("remove-guardian", "Quitar", "trash-2", "quiet")
         : ""}
     </div>
-    <div class="form-grid">
+    <div class="form-grid row g-3">
       ${field("Nombres", "g_names", g.names)}${field(
         "Apellidos",
         "g_surnames",
@@ -531,6 +537,18 @@ function guardianFields(g = {}, i = 0) {
     </div>
   </div>`;
 }
+function reindexGuardians(form = document.querySelector("#student-form")) {
+  if (!form) return;
+  [...form.querySelectorAll(".guardian-block")].forEach((block, index) => {
+    block.dataset.guardian = index;
+    const heading = block.querySelector(".guardian-title strong");
+    if (heading) heading.textContent = `Responsable ${index + 1}`;
+    block.querySelectorAll("input,select,textarea").forEach((input) => {
+      clearFieldError(input);
+      input.id = `${form.id}-${input.name}-${index}`;
+    });
+  });
+}
 async function students() {
   let form = "";
   if (state.showStudentForm) {
@@ -547,23 +565,23 @@ async function students() {
       "Busque un estudiante y abra su expediente para continuar una tarea.",
       "Estudiantes",
     )}
-    <div class="page-tools">
+    <div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2">
       ${actionButton("new-student", "Registrar estudiante", "user-round-plus")}
     </div>
     ${form}${card(
       "Estudiantes registrados",
       "users-round",
-      /* HTML */ `<div class="filters">
-          <label class="field"
-            ><span>Buscar por nombre o código</span
-            ><input
+      /* HTML */ `<div class="filters row g-3">
+          <label class="field col-12 col-md-6"
+            ><span class="form-label">Buscar por nombre o código</span
+            ><input class="form-control"
               id="student-search"
               type="search"
               placeholder="Nombre o EST-0001"
           /></label>
-          <label class="field"
-            ><span>Grado</span
-            ><select id="student-grade">
+          <label class="field col-12 col-md-6"
+            ><span class="form-label">Grado</span
+            ><select class="form-select" id="student-grade">
               <option value="">Todos los grados</option>
               ${grades.map((g) => option(g[0], g[1])).join("")}
             </select></label
@@ -574,8 +592,8 @@ async function students() {
 }
 function studentTable(rows) {
   return rows.length
-    ? /* HTML */ `<div class="table-wrap student-list">
-        <table>
+    ? /* HTML */ `<div class="table-responsive table-wrap student-list">
+        <table class="table table-hover align-middle mb-0">
           <thead>
             <tr>
               <th>Estudiante</th>
@@ -634,7 +652,8 @@ async function enrollments(embedded = false) {
       "Registre solicitudes y confirme las matrículas del año lectivo.",
       "Matrícula",
     )}
-    <div class="two-col">
+    <div class="row g-3">
+      <div class="col-12 col-xl-5">
       ${card(
         "Nueva solicitud",
         "clipboard-plus",
@@ -667,16 +686,19 @@ async function enrollments(embedded = false) {
             "number",
             false,
             'min="0.01" step="0.01" placeholder="Se requiere al confirmar"',
-          )}<button class="btn primary" type="submit">
+          )}<button class="btn btn-primary app-action" type="submit">
             ${icon("save", 18)} Guardar solicitud
           </button>
         </form>`,
-      )}${card(
+      )}
+      </div>
+      <div class="col-12 col-xl-7">
+      ${card(
         "Matrículas registradas",
         "list",
         list.length
-          ? /* HTML */ `<div class="table-wrap enrollment-list">
-              <table>
+          ? /* HTML */ `<div class="table-responsive table-wrap enrollment-list">
+              <table class="table table-hover align-middle mb-0">
                 <thead>
                   <tr>
                     <th>Estudiante</th>
@@ -726,6 +748,7 @@ async function enrollments(embedded = false) {
               "Registre una prematrícula o matrícula directa.",
             ),
       )}
+      </div>
     </div>`;
 }
 async function documents(embedded = false) {
@@ -759,8 +782,8 @@ async function documents(embedded = false) {
       "Control de documentos",
       "file-text",
       docs.length
-        ? /* HTML */ `<div class="table-wrap document-list">
-            <table>
+        ? /* HTML */ `<div class="table-responsive table-wrap document-list">
+            <table class="table table-hover align-middle mb-0">
               <thead>
                 <tr>
                   <th>Documento</th>
@@ -821,7 +844,7 @@ async function payments() {
       "cash-tab",
     )}
     <div class="cash-context">
-      ${id ? `<div class="selected-student"><div><small>Registrando para</small><strong>${h(state.students.find((s) => s.id === id)?.names || "")} ${h(state.students.find((s) => s.id === id)?.surnames || "")}</strong><span>EST-${String(id).padStart(4, "0")} · ${grade(state.students.find((s) => s.id === id)?.grade || 1)}</span></div><button class="btn outline" type="button" data-action="change-cash-student">Cambiar estudiante</button></div>` : `<section class="student-picker" aria-labelledby="cash-student-title"><h2 id="cash-student-title">Elegir estudiante</h2><label class="field"><span>Buscar por nombre o código</span><input id="cash-search" type="search" autocomplete="off" placeholder="Ej.: María Rodríguez o EST-0001" aria-controls="cash-student-results"></label><div id="cash-student-results" class="student-results" aria-live="polite">${cashStudentResults("")}</div></section>`}
+      ${id ? `<div class="selected-student"><div><small>Registrando para</small><strong>${h(state.students.find((s) => s.id === id)?.names || "")} ${h(state.students.find((s) => s.id === id)?.surnames || "")}</strong><span>EST-${String(id).padStart(4, "0")} · ${grade(state.students.find((s) => s.id === id)?.grade || 1)}</span></div><button class="btn btn-outline-primary app-action" type="button" data-action="change-cash-student">Cambiar estudiante</button></div>` : `<section class="student-picker" aria-labelledby="cash-student-title"><h2 id="cash-student-title">Elegir estudiante</h2><label class="field cash-search-field"><span class="form-label">Buscar por nombre o código</span><input class="form-control" id="cash-search" type="search" autocomplete="off" placeholder="Ej.: María Rodríguez o EST-0001" aria-controls="cash-student-results"></label><div id="cash-student-results" class="student-results" aria-live="polite">${cashStudentResults("")}</div></section>`}
       <div class="cash-year">${yearSelect()}</div>
     </div>
     ${
@@ -829,7 +852,7 @@ async function payments() {
         ? card(
             "Historial · año lectivo seleccionado",
             "history",
-            `<div class="filters"><label class="field"><span>Buscar por nombre</span><input id="payment-search" type="search" value="${h(state.paymentSearch || "")}"></label><label class="field"><span>Mes de la obligación</span><select id="payment-month">${option("", "Todos los meses", state.paymentMonth)}${months.map((m, i) => option(i + 1, m, state.paymentMonth)).join("")}</select></label><label class="field"><span>Concepto</span><select id="payment-concept">${["", "Matrícula", "Mensualidad"].map((c) => option(c, c || "Todos los conceptos", state.paymentConcept)).join("")}</select></label></div><div id="payment-table">${paymentTable(rows.filter((p) => (!state.paymentMonth || p.month === Number(state.paymentMonth)) && (!state.paymentConcept || p.concept === state.paymentConcept) && (!state.paymentSearch || p.student_name.toLocaleLowerCase("es").includes(state.paymentSearch.toLocaleLowerCase("es")))))}</div>`,
+            `<div class="filters row g-3"><label class="field col-12 col-lg-4"><span class="form-label">Buscar por nombre</span><input class="form-control" id="payment-search" type="search" value="${h(state.paymentSearch || "")}"></label><label class="field col-12 col-lg-4"><span class="form-label">Mes de la obligación</span><select class="form-select" id="payment-month">${option("", "Todos los meses", state.paymentMonth)}${months.map((m, i) => option(i + 1, m, state.paymentMonth)).join("")}</select></label><label class="field col-12 col-lg-4"><span class="form-label">Concepto</span><select class="form-select" id="payment-concept">${["", "Matrícula", "Mensualidad"].map((c) => option(c, c || "Todos los conceptos", state.paymentConcept)).join("")}</select></label></div><div id="payment-table">${paymentTable(rows.filter((p) => (!state.paymentMonth || p.month === Number(state.paymentMonth)) && (!state.paymentConcept || p.concept === state.paymentConcept) && (!state.paymentSearch || p.student_name.toLocaleLowerCase("es").includes(state.paymentSearch.toLocaleLowerCase("es")))))}</div>`,
           )
         : !id
           ? empty(
@@ -845,12 +868,12 @@ async function payments() {
                   "month",
                   months.map((m, i) => [i + 1, m]),
                   new Date().getMonth() + 1,
-                )}${field("Monto (C$)", "amount", "", "number", true, 'min="0.01" step="0.01"')}<button class="btn primary">Crear mensualidad</button></form>`,
+                )}${field("Monto (C$)", "amount", "", "number", true, 'min="0.01" step="0.01"')}<button class="btn btn-primary app-action">Crear mensualidad</button></form>`,
               )
             : card(
                 "Registrar pago o abono",
                 "credit-card",
-                `<form id="payment-form" class="stack-form"><label class="field"><span>Obligación pendiente *</span><select name="charge_id" id="payment-charge" required>${chargeOptions(charges)}</select></label><div id="charge-review" class="charge-review" aria-live="polite">Seleccione una obligación para revisar sus importes.</div>${field("Monto del abono (C$)", "amount", "", "number", true, 'min="0.01" step="0.01" inputmode="decimal" aria-describedby="amount-error remaining"')}<p id="amount-error" class="field-error" role="alert" aria-live="polite"></p><output id="remaining" class="remaining" aria-live="polite" hidden></output><button class="btn primary payment-submit" disabled>Registrar pago</button></form>`,
+                `<form id="payment-form" class="stack-form"><label class="field cash-charge-field"><span class="form-label">Obligación pendiente *</span><select class="form-select" name="charge_id" id="payment-charge" required ${charges.some((c) => c.balance_cents > 0) ? "" : "disabled"}>${chargeOptions(charges)}</select></label><div id="charge-review" class="charge-review" aria-live="polite">${charges.some((c) => c.balance_cents > 0) ? "Seleccione una obligación para revisar sus importes." : "Este estudiante no tiene obligaciones pendientes para el año seleccionado."}</div>${field("Monto del abono (C$)", "amount", "", "number", true, 'min="0.01" step="0.01" inputmode="decimal" aria-describedby="amount-error remaining"')}<p id="amount-error" class="field-error" role="alert" aria-live="polite"></p><output id="remaining" class="remaining" aria-live="polite" hidden></output><button class="btn btn-primary app-action payment-submit" disabled>Registrar pago</button></form>`,
               )
     }
     ${
@@ -881,22 +904,20 @@ function chargeOptions(charges) {
       .map((c) =>
         option(
           c.id,
-          `${c.concept}${c.month ? ` · ${monthLabel(c.month)}` : ""} ${c.school_year} — saldo ${money(c.balance_cents)}`,
+          `${c.concept}${c.month ? ` · ${monthLabel(c.month)}` : ""} · ${c.school_year}`,
         ),
       )
       .join("")}`;
 }
 function cashStudentResults(query) {
-  const q = query.trim().toLocaleLowerCase("es");
-  if (!q) return `<p class="picker-hint">Escriba un nombre o código para buscar. No se selecciona a nadie automáticamente.</p>`;
-  const matches = state.students.filter((s) => `${s.names} ${s.surnames} EST-${String(s.id).padStart(4, "0")} ${s.id}`.toLocaleLowerCase("es").includes(q));
+  if (!query.trim()) return `<p class="picker-hint">Busca un estudiante por nombre o código.</p>`;
+  const { matches, shown, remaining } = findCashStudents(state.students, query);
   if (!matches.length) return `<p class="picker-empty">No encontramos estudiantes con “${h(query)}”. Revise el nombre o código.</p>`;
-  const shown = matches.slice(0, 6);
-  return `<div class="student-result-list">${shown.map((s) => `<button type="button" class="student-result" data-action="select-cash-student" data-id="${s.id}"><strong>${h(s.names)} ${h(s.surnames)}</strong><span>EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)}</span></button>`).join("")}</div>${matches.length > shown.length ? `<p class="picker-hint">Mostrando 6 de ${matches.length} resultados. Refine la búsqueda para encontrar otro estudiante.</p>` : ""}`;
+  return `<div class="student-result-list">${shown.map((s) => `<button type="button" class="student-result" data-action="select-cash-student" data-id="${s.id}"><strong>${h(s.names)} ${h(s.surnames)}</strong><span>EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)}</span></button>`).join("")}</div>${remaining ? `<p class="picker-hint">Mostrando ${shown.length} de ${matches.length} resultados. Refine la búsqueda para encontrar otro estudiante.</p>` : ""}`;
 }
 function chargeTable(charges) {
-  return /* HTML */ `<div class="table-wrap financial-list">
-    <table>
+  return /* HTML */ `<div class="table-responsive table-wrap financial-list">
+    <table class="table table-hover align-middle mb-0">
       <thead>
         <tr>
           <th>Concepto</th>
@@ -942,8 +963,8 @@ function chargeTable(charges) {
 }
 function paymentTable(rows) {
   return rows.length
-    ? /* HTML */ `<div class="table-wrap payment-list">
-        <table>
+    ? /* HTML */ `<div class="table-responsive table-wrap payment-list">
+        <table class="table table-hover align-middle mb-0">
           <thead>
             <tr>
               <th>Estudiante</th>
@@ -1078,11 +1099,11 @@ async function reportBody() {
   return `<p>Año lectivo: ${state.year}. Los pagos se agrupan por año de la obligación, aunque se reciban en otra fecha. Documentos: estado actual de estudiantes vinculados al período.</p><div class="account-stats"><div>Estudiantes <strong>${d.stats.students}</strong></div><div>Matrículas activas <strong>${d.stats.enrollments}</strong></div><div>Pagos válidos <strong>${valid.length}</strong></div><div>Documentos pendientes <strong>${d.stats.documents}</strong></div></div><h2>Matrículas por grado</h2>${grades.map(([n, l]) => `<p>${l}: ${e.filter((x) => x.grade === n && x.status === "Activa" && x.school_year === Number(state.year)).length}</p>`).join("")}<h2>Pagos por concepto · C$</h2>${["Matrícula", "Mensualidad"].map((c) => `<p>${c}: ${money(valid.filter((p) => p.concept === c).reduce((a, p) => a + p.amount_cents, 0))}</p>`).join("")}<p>Total recibido para el año lectivo: ${money(valid.reduce((a, p) => a + p.amount_cents, 0))}</p>`;
 }
 async function reports() {
-  return `${pageTitle("Reportes", "Resumen administrativo del año lectivo.")}<div class="page-tools">${yearSelect()}${actionButton("print-report", "Imprimir reporte", "printer", "outline")}</div>${await reportBody()}`;
+  return `${pageTitle("Reportes", "Resumen administrativo del año lectivo.")}<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2">${yearSelect()}${actionButton("print-report", "Imprimir reporte", "printer", "outline")}</div>${await reportBody()}`;
 }
 async function dossier() {
   const s = await api(`/students/${state.selectedStudent}`);
-  const heading = `${actionButton("open-list", "Volver al listado", "arrow-left", "quiet")}${pageTitle(`${h(s.names)} ${h(s.surnames)}`, `EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)} · año registrado ${s.school_year}`)}<div class="page-tools">${["enrollments", "account"].includes(state.tab) ? yearSelect(state.tab === "account") : ""}${actionButton("pay-student", "Registrar pago", "credit-card")}</div>${tabs(
+  const heading = `${actionButton("open-list", "Volver al listado", "arrow-left", "quiet")}${pageTitle(`${h(s.names)} ${h(s.surnames)}`, `EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)} · año registrado ${s.school_year}`)}<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2">${["enrollments", "account"].includes(state.tab) ? yearSelect(state.tab === "account") : ""}${actionButton("pay-student", "Registrar pago", "credit-card")}</div>${tabs(
     [
       ["data", "Datos y responsables"],
       ["enrollments", "Matrícula"],
@@ -1138,7 +1159,7 @@ function printSection(title, body) {
   const dialog = document.createElement("dialog");
   dialog.className = "print-preview";
   dialog.innerHTML =
-    '<div class="page-tools"><button class="btn primary" data-print>Imprimir</button><button class="btn outline" data-close>Cerrar vista previa</button></div><iframe title="Vista previa del comprobante"></iframe>';
+    '<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2"><button class="btn btn-primary app-action" data-print>Imprimir</button><button class="btn btn-outline-primary app-action" data-close>Cerrar vista previa</button></div><iframe title="Vista previa del comprobante"></iframe>';
   document.body.append(dialog);
   const frame = dialog.querySelector("iframe");
   frame.srcdoc = /* HTML */ `<!doctype html>
@@ -1356,6 +1377,7 @@ async function handleAction(button) {
       "beforeend",
       guardianFields({}, list.children.length),
     );
+    reindexGuardians();
     configureInputs();
     state.dirty = true;
     icons();
@@ -1363,6 +1385,7 @@ async function handleAction(button) {
   }
   if (action === "remove-guardian") {
     button.closest(".guardian-block").remove();
+    reindexGuardians();
     state.dirty = true;
     return;
   }
@@ -1618,6 +1641,7 @@ document.addEventListener("change", async (event) => {
 });
 document.addEventListener("input", (event) => {
   const el = event.target;
+  if (el.dataset.errorId) clearFieldError(el);
   if (el.closest("form") && el.form?.id !== "login-form")
     state.dirty = formSignature() !== state.formBaseline;
   el.setCustomValidity?.("");
@@ -1631,6 +1655,19 @@ document.addEventListener("input", (event) => {
   }
   if (el.form?.id === "payment-form") updatePaymentPreview();
 });
+document.addEventListener("invalid", (event) => {
+  const input = event.target;
+  if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
+    if (input.form?.id && input.form.id !== "login-form")
+      showFieldError(
+        input,
+        input instanceof HTMLInputElement && input.type === "email" && input.validity.typeMismatch
+          ? "Escribe un correo electrónico válido."
+          : input.validationMessage || "Revise este campo.",
+        { focus: false },
+      );
+  }
+}, true);
 window.addEventListener("beforeunload", (e) => {
   if (state.dirty) {
     e.preventDefault();
@@ -1662,7 +1699,7 @@ function configureInputs() {
     if (!el.parentElement.querySelector("button"))
       el.insertAdjacentHTML(
         "afterend",
-        '<button type="button" class="btn quiet" data-action="copy-address">Usar dirección del estudiante</button>',
+        '<button type="button" class="btn btn-light text-secondary app-action" data-action="copy-address">Usar dirección del estudiante</button>',
       );
   });
   const f = document.querySelector("#enrollment-form");
@@ -1675,6 +1712,57 @@ function configureInputs() {
       "Monto de matrícula (C$) *";
   }
 }
+function clearFieldError(input) {
+  if (!input) return;
+  const errorId = input.dataset.errorId;
+  if (errorId) {
+    const message = document.getElementById(errorId);
+    if (message && message !== document.querySelector("#amount-error")) message.remove();
+  }
+  input.removeAttribute("aria-invalid");
+  if (errorId && errorId !== "amount-error") {
+    const describedBy = (input.getAttribute("aria-describedby") || "")
+      .split(/\s+/).filter((id) => id && id !== errorId);
+    if (describedBy.length) input.setAttribute("aria-describedby", describedBy.join(" "));
+    else input.removeAttribute("aria-describedby");
+  }
+  delete input.dataset.errorId;
+}
+function showFieldError(input, message, { focus = true } = {}) {
+  if (!input) return false;
+  clearFieldError(input);
+  const existing = input.name === "amount" && document.querySelector("#amount-error");
+  const block = input.closest(".guardian-block");
+  input.id ||= `${input.form?.id || "form"}-${input.name}${block ? `-${block.dataset.guardian}` : ""}`;
+  const errorId = existing?.id || `${input.id}-error`;
+  let error = existing || document.getElementById(errorId);
+  if (!error) {
+    error = document.createElement("p");
+    error.id = errorId;
+    error.className = "field-error";
+    error.setAttribute("role", "alert");
+    input.closest(".field")?.after(error);
+  }
+  error.textContent = message;
+  const describedBy = new Set((input.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+  describedBy.add(errorId);
+  input.setAttribute("aria-describedby", [...describedBy].join(" "));
+  input.setAttribute("aria-invalid", "true");
+  input.dataset.errorId = errorId;
+  if (focus) {
+    input.focus();
+    error.scrollIntoView({ block: "nearest" });
+  }
+  return true;
+}
+function errorField(form, error) {
+  if (!error?.field) return null;
+  if (error.guardianIndex != null) {
+    const block = [...form.querySelectorAll(".guardian-block")][error.guardianIndex];
+    return block?.querySelector(`[name="${error.field}"]`) || null;
+  }
+  return form.elements.namedItem(error.field) || null;
+}
 function updatePaymentPreview() {
   const f = document.querySelector("#payment-form");
   if (!f) return;
@@ -1683,7 +1771,9 @@ function updatePaymentPreview() {
   );
   document.querySelector("#charge-review").innerHTML = c
     ? `<div class="charge-summary"><h3>${h(c.concept)}${c.month ? ` · ${monthLabel(c.month)}` : ""} · ${c.school_year}</h3><dl><div><dt>Monto original</dt><dd>${money(c.amount_cents)}</dd></div><div><dt>Descuento</dt><dd>${money(c.discount_cents)}</dd></div><div><dt>Total pagado</dt><dd>${money(c.paid_cents)}</dd></div><div class="charge-balance"><dt>Saldo pendiente</dt><dd>${money(c.balance_cents)}</dd></div></dl></div>`
-    : "Seleccione una obligación para ver sus importes.";
+    : state.charges.some((item) => item.balance_cents > 0)
+      ? "Seleccione una obligación para revisar sus importes."
+      : "Este estudiante no tiene obligaciones pendientes para el año seleccionado.";
   const raw = f.elements.amount.value;
   const amount = raw === "" ? 0 : Math.round(Number(raw) * 100);
   f.elements.amount.max = c ? (c.balance_cents / 100).toFixed(2) : "";
@@ -1760,19 +1850,15 @@ document.addEventListener("submit", async (event) => {
   try {
     const birth = form.querySelector('[name="birth_date"]');
     if (birth && birth.value > today()) {
-      birth.setCustomValidity("La fecha de nacimiento no puede ser futura");
-      birth.reportValidity();
+      showFieldError(birth, "La fecha de nacimiento no puede ser futura.");
       return;
     }
-    for (const phone of form.querySelectorAll('[name="g_phone"]')) {
+    for (const [index, phone] of [...form.querySelectorAll('[name="g_phone"]')].entries()) {
       if (
         !/^\+?[\d ()-]+$/.test(phone.value) ||
         !/^[0-9]{8,15}$/.test(phone.value.replace(/\D/g, ""))
       ) {
-        phone.setCustomValidity(
-          "Use entre 8 y 15 dígitos; admite +, espacios y guiones",
-        );
-        phone.reportValidity();
+        showFieldError(phone, `Responsable ${index + 1}: usa entre 8 y 15 dígitos; admite +, espacios y guiones.`);
         return;
       }
     }
@@ -1852,11 +1938,10 @@ document.addEventListener("submit", async (event) => {
       const charge = state.charges.find((c) => c.id === Number(data.charge_id));
       const cents = Math.round(Number(data.amount) * 100);
       if (!charge || !Number.isFinite(cents) || cents < 1 || cents > charge.balance_cents) {
-        const error = document.querySelector("#amount-error");
-        error.textContent = charge && cents > charge.balance_cents
-          ? `El monto supera el saldo disponible de ${money(charge.balance_cents)}.`
-          : "Seleccione una obligación e ingrese un monto válido.";
-        form.elements.amount.focus();
+        showFieldError(charge && cents > charge.balance_cents ? form.elements.amount : form.elements.charge_id,
+          charge && cents > charge.balance_cents
+            ? `El monto supera el saldo disponible de ${money(charge.balance_cents)}.`
+            : "Seleccione una obligación e ingrese un monto válido.");
         return;
       }
       const saved = await api("/payments", { method: "POST", body: data });
@@ -1876,17 +1961,19 @@ document.addEventListener("submit", async (event) => {
       return;
     }
   } catch (e) {
-    let error = form.querySelector(".form-error");
-    if (!error) {
-      error = document.createElement("p");
-      error.className = "form-error";
-      error.setAttribute("role", "alert");
-      form.append(error);
+    const field = errorField(form, e);
+    if (field) showFieldError(field, e.message);
+    else {
+      let error = form.querySelector(":scope > .form-error");
+      if (!error) {
+        error = document.createElement("p");
+        error.className = "form-error";
+        error.setAttribute("role", "alert");
+        form.append(error);
+      }
+      error.textContent = e.message;
+      error.scrollIntoView({ block: "nearest" });
     }
-    error.textContent = e.message;
-    const field = form.elements.amount && /abono|saldo|monto/i.test(e.message) ? form.elements.amount : form.querySelector("input,select,textarea");
-    field?.focus();
-    error.scrollIntoView({ block: "nearest" });
   }
 });
 try {

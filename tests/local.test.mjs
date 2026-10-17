@@ -13,6 +13,7 @@ const memory = () => {
 globalThis.localStorage = memory();
 globalThis.sessionStorage = memory();
 const { api } = await import("../public/js/api.js");
+const { chartBarPercent, findCashStudents } = await import("../public/js/ui-utils.js");
 
 test("los textos de la interfaz están guardados en UTF-8 correcto", () => {
   for (const path of [
@@ -28,6 +29,28 @@ test("los textos de la interfaz están guardados en UTF-8 correcto", () => {
     readFileSync("public/js/app.js", "utf8"),
     /Sistema de Gestión de Matrícula y Mensualidades de Primaria/,
   );
+});
+
+test("la búsqueda de Caja encuentra por nombre y código, e informa el límite", () => {
+  const students = Array.from({ length: 8 }, (_, index) => ({
+    id: index + 1,
+    names: index === 0 ? "María Elena" : `Alumno ${index + 1}`,
+    surnames: index === 0 ? "Rodríguez" : "Prueba",
+  }));
+  assert.equal(findCashStudents(students, "MARÍA").matches[0].id, 1);
+  assert.equal(findCashStudents(students, "est-0002").matches[0].id, 2);
+  assert.equal(findCashStudents(students, "no existe").matches.length, 0);
+  assert.equal(findCashStudents(students, "").matches.length, 0);
+  const limited = findCashStudents(students, "alumno");
+  assert.equal(limited.shown.length, 6);
+  assert.equal(limited.remaining, 1);
+});
+
+test("el gráfico usa una escala común y conserva proporciones", () => {
+  assert.equal(chartBarPercent(0, 1000), 0);
+  assert.equal(chartBarPercent(500, 1000), 50);
+  assert.equal(chartBarPercent(1000, 1000), 100);
+  assert.equal(chartBarPercent(200, 0), 0);
 });
 
 test("versión local: matrícula, abonos, descuentos y roles", async () => {
@@ -111,6 +134,11 @@ test("versión local: matrícula, abonos, descuentos y roles", async () => {
     }),
     /supera/,
   );
+  const balanceAfterRejectedPayment = (await api(`/charges?student_id=${studentId}`)).find(
+    (charge) => charge.id === c.id,
+  ).balance_cents;
+  assert.equal(balanceAfterRejectedPayment, 30019);
+  assert.ok(balanceAfterRejectedPayment >= 0);
   await assert.rejects(
     api(`/payments/${p.id}/void`, {
       method: "POST",
@@ -347,4 +375,72 @@ test("recepción mensual usa fecha civil de Nicaragua y excluye anulados", async
   const d = await api("/dashboard?year=2025");
   assert.equal(d.monthly.find((m) => m.month === 12).amount_cents, 1234);
   assert.equal(d.stats.payments_cents, 6244);
+});
+
+test("las validaciones de campos identifican el control y responsable incorrectos", async () => {
+  await api("/login", {
+    method: "POST",
+    body: { username: "caja", password: "Caja12345!" },
+  });
+  const student = {
+    names: "Prueba",
+    surnames: "Campo",
+    birth_date: "2018-03-02",
+    sex: "Femenino",
+    address: "Ficticia",
+    grade: 3,
+    school_year: 2026,
+  };
+  const guardian = {
+    names: "Tutor",
+    surnames: "Prueba",
+    relationship: "Tutor/a",
+    phone: "88888888",
+    address: "Ficticia",
+  };
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: {
+        student: { ...student, birth_date: "2099-01-01" },
+        guardians: [guardian],
+      },
+    }),
+    (error) => error.field === "birth_date",
+  );
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: {
+        student,
+        guardians: [guardian, { ...guardian, phone: "abc" }],
+      },
+    }),
+    (error) => error.field === "g_phone" && error.guardianIndex === 1,
+  );
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: {
+        student,
+        guardians: [{ ...guardian, email: "no-es-correo" }],
+      },
+    }),
+    (error) => error.field === "g_email" && error.guardianIndex === 0,
+  );
+
+  const editedGuardians = [
+    { ...guardian, names: "Primero" },
+    { ...guardian, names: "Responsable que se quita" },
+    { ...guardian, names: "Tercero" },
+  ];
+  editedGuardians.splice(1, 1);
+  editedGuardians.push({ ...guardian, names: "Agregado", phone: "inválido" });
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: { student: { ...student, names: "Prueba reordenada" }, guardians: editedGuardians },
+    }),
+    (error) => error.field === "g_phone" && error.guardianIndex === 2,
+  );
 });

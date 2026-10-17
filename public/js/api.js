@@ -20,31 +20,34 @@ const read = () => {
 };
 const save = (db) => localStorage.setItem(KEY, JSON.stringify(db));
 const id = (rows) => Math.max(0, ...rows.map((x) => x.id)) + 1;
-const fail = (m) => {
-  throw Error(m);
+const fail = (m, field = null, guardianIndex = null) => {
+  const error = Error(m);
+  if (field) error.field = field;
+  if (guardianIndex != null) error.guardianIndex = guardianIndex;
+  throw error;
 };
-const req = (v, label) => {
-  if (typeof v !== "string" || !v.trim()) fail(`${label} es obligatorio`);
+const req = (v, label, field = null, guardianIndex = null) => {
+  if (typeof v !== "string" || !v.trim()) fail(`${label} es obligatorio`, field, guardianIndex);
   return v.trim();
 };
-const int = (v, label, min, max) => {
+const int = (v, label, min, max, field = null) => {
   const n = Number(v);
-  if (!Number.isInteger(n) || n < min || n > max) fail(`${label} no es válido`);
+  if (!Number.isInteger(n) || n < min || n > max) fail(`${label} no es válido`, field);
   return n;
 };
-const cents = (v, label = "Monto") => {
+const cents = (v, label = "Monto", field = null) => {
   const s = String(v);
   if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(s) || Number(s) <= 0)
-    fail(`${label} debe ser positivo y tener hasta dos decimales`);
+    fail(`${label} debe ser positivo y tener hasta dos decimales`, field);
   return Math.round(Number(s) * 100);
 };
-const date = (v, label) => {
+const date = (v, label, field = null) => {
   const d =
     typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
       ? new Date(`${v}T12:00:00Z`)
       : null;
   if (!d || Number.isNaN(d.valueOf()) || d.toISOString().slice(0, 10) !== v)
-    fail(`${label} no es válida`);
+    fail(`${label} no es válida`, field);
   return v;
 };
 const now = () => new Date().toISOString();
@@ -115,23 +118,23 @@ const payments = (db) =>
         voided_by_name: p.voided_by,
       };
     });
-function guardian(g) {
+function guardian(g, index) {
   const x = {
-    names: req(g.names, "Nombre del responsable"),
-    surnames: req(g.surnames, "Apellido del responsable"),
-    relationship: req(g.relationship, "Parentesco"),
-    phone: req(g.phone, "Teléfono"),
-    address: req(g.address, "Dirección del responsable"),
+    names: req(g.names, "Nombre del responsable", "g_names", index),
+    surnames: req(g.surnames, "Apellido del responsable", "g_surnames", index),
+    relationship: req(g.relationship, "Parentesco", "g_relationship", index),
+    phone: req(g.phone, "Teléfono", "g_phone", index),
+    address: req(g.address, "Dirección del responsable", "g_address", index),
     email: g.email?.trim() || null,
     identity_number: g.identity_number?.trim() || null,
   };
   if (x.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email))
-    fail("Correo no válido");
+    fail("Correo no válido", "g_email", index);
   if (
     !/^\+?[\d ()-]+$/.test(x.phone) ||
     !/^[0-9]{8,15}$/.test(x.phone.replace(/\D/g, ""))
   )
-    fail("Teléfono: use entre 8 y 15 dígitos; admite +, espacios y guiones");
+    fail("Teléfono: use entre 8 y 15 dígitos; admite +, espacios y guiones", "g_phone", index);
   return x;
 }
 function studentData(body) {
@@ -140,21 +143,21 @@ function studentData(body) {
   body.guardians.forEach(guardian);
   const s = body.student || body,
     x = {
-      names: req(s.names, "Nombres"),
-      surnames: req(s.surnames, "Apellidos"),
-      birth_date: date(s.birth_date, "Fecha de nacimiento"),
-      sex: req(s.sex, "Sexo"),
-      address: req(s.address, "Dirección"),
-      grade: int(s.grade, "Grado", 1, 6),
-      school_year: int(s.school_year, "Año lectivo", 2020, 2100),
-      status: req(s.status || "Activo", "Estado"),
+      names: req(s.names, "Nombres", "names"),
+      surnames: req(s.surnames, "Apellidos", "surnames"),
+      birth_date: date(s.birth_date, "Fecha de nacimiento", "birth_date"),
+      sex: req(s.sex, "Sexo", "sex"),
+      address: req(s.address, "Dirección", "address"),
+      grade: int(s.grade, "Grado", 1, 6, "grade"),
+      school_year: int(s.school_year, "Año lectivo", 2020, 2100, "school_year"),
+      status: req(s.status || "Activo", "Estado", "status"),
     };
   if (
     !["Femenino", "Masculino", "Otro"].includes(x.sex) ||
     !["Activo", "Inactivo"].includes(x.status)
   )
     fail("Sexo o estado no válido");
-  if (x.birth_date > today()) fail("Fecha de nacimiento no puede ser futura");
+  if (x.birth_date > today()) fail("Fecha de nacimiento no puede ser futura", "birth_date");
   return x;
 }
 function enrollmentCharge(db, e, amount_cents) {
@@ -273,7 +276,7 @@ export async function api(path, options = {}) {
       ...b.guardians.map((g, i) => ({
         id: id(db.guardians) + i,
         student_id: n,
-        ...guardian(g),
+        ...guardian(g, i),
       })),
     );
     [
@@ -311,7 +314,7 @@ export async function api(path, options = {}) {
       ...b.guardians.map((g, i) => ({
         id: id(db.guardians) + i,
         student_id: s.id,
-        ...guardian(g),
+        ...guardian(g, i),
       })),
     );
     activity(db, "Estudiante actualizado", name(db, s.id));
@@ -472,13 +475,13 @@ export async function api(path, options = {}) {
     return rows;
   }
   if (route === "/payments" && method === "POST") {
-    const charge_id = int(b.charge_id, "Cargo", 1, 1e9),
-      amount_cents = cents(b.amount, "Abono"),
+    const charge_id = int(b.charge_id, "Cargo", 1, 1e9, "charge_id"),
+      amount_cents = cents(b.amount, "Abono", "amount"),
       raw = db.charges.find((c) => c.id === charge_id);
-    if (!raw) fail("Cargo no encontrado");
+    if (!raw) fail("Cargo no encontrado", "charge_id");
     const c = charge(db, raw);
     if (amount_cents > c.balance_cents)
-      fail("El abono supera el saldo pendiente");
+      fail("El abono supera el saldo pendiente", "amount");
     const n = id(db.payments);
     db.payments.push({
       id: n,

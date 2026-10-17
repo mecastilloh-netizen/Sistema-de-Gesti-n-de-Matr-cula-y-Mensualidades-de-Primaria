@@ -1,10 +1,10 @@
 # Sistema de Gestión de Matrícula y Mensualidades de Primaria
 
-Versión de demostración hecha con **HTML, CSS y JavaScript nativo**. No requiere Node, paquetes ni base de datos. Los registros se guardan en `localStorage` del navegador.
+Versión de demostración hecha con **HTML, CSS y JavaScript nativo**. Usa Bootstrap **5.3.8** como hoja de estilos local, además de SweetAlert2 y Lucide locales y la tipografía disponible en el sistema. No requiere Node, paquetes ni conexión a Internet para ejecutarse; los registros se guardan en `localStorage` del navegador.
 
 ## Abrir
 
-Abra la carpeta `public` con **Live Server** de VS Code o cualquier servidor estático y visite `index.html`. Los módulos JavaScript pueden no cargar al abrir el archivo directamente con `file://`.
+Abra la carpeta `public` con **Live Server** de VS Code o cualquier servidor estático y visite `index.html`. Los módulos JavaScript pueden no cargar al abrir el archivo directamente con `file://`. Bootstrap está en `public/vendor/bootstrap-5.3.8`; sus archivos compilados se obtuvieron de la distribución oficial y se conserva su licencia MIT. Esta interfaz usa el CSS de Bootstrap; no necesita sus plugins JavaScript.
 
 Accesos de demostración:
 
