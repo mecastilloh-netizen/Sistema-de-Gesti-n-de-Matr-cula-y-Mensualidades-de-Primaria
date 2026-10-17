@@ -1,5 +1,6 @@
 ﻿import {
   api,
+  fmtDate,
   money,
   escape as h,
   today,
@@ -25,13 +26,24 @@ const state = {
 const nav = [
   ["dashboard", "Inicio", "house"],
   ["students", "Estudiantes", "users-round"],
-  ["enrollments", "Matrícula", "clipboard-list"],
-  ["documents", "Documentos", "files"],
-  ["payments", "Pagos y mensualidades", "credit-card"],
-  ["account", "Estado de cuenta", "file-text"],
-  ["reports", "Reportes", "chart-no-axes-column"],
-  ["discounts", "Descuentos", "badge-percent"],
+  ["payments", "Caja", "credit-card"],
 ];
+Object.assign(state, {
+  year: yearNow(),
+  dossier: false,
+  tab: "data",
+  cashTab: "pay",
+  dirty: false,
+});
+const yearSelect = (all = false) =>
+  select(
+    "Año lectivo de los cargos",
+    "context_year",
+    [...(all ? [["", "Todos los años"]] : []), ...years],
+    state.year,
+  );
+const tabs = (items, current, action) =>
+  `<div class="task-tabs" aria-label="Secciones">${items.map(([key, label]) => actionButton(action, label, "chevron-right", key === current ? "primary" : "outline", `data-tab="${key}" aria-pressed="${key === current}"`)).join("")}</div>`;
 const field = (
   label,
   name,
@@ -72,7 +84,7 @@ const studentOptions = () => [
   ["", "Seleccione un estudiante"],
   ...state.students.map((s) => [
     s.id,
-    `${s.names} ${s.surnames} · ${grade(s.grade)}`,
+    `${s.names} ${s.surnames} · EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)}`,
   ]),
 ];
 const statusBadge = (text) =>
@@ -121,14 +133,6 @@ const actionButton = (action, label, iconName, cls = "primary", attrs = "") =>
   >
     ${icon(iconName, 18)} ${label}
   </button>`;
-const fmtDate = (value) =>
-  value
-    ? new Date(
-        value.length === 10
-          ? `${value}T12:00:00`
-          : `${value.replace(" ", "T")}Z`,
-      ).toLocaleDateString("es-NI")
-    : "—";
 const monthLabel = (n) => (n ? months[n - 1] : "—");
 const getForm = (form) => Object.fromEntries(new FormData(form));
 function icons() {
@@ -140,7 +144,11 @@ function renderShell(content) {
     .map(
       ([id, label, ico]) =>
         /* HTML */ `<button
-          class="nav-link ${state.page === id ? "active" : ""}"
+          class="nav-link ${state.page === id ||
+          (id === "students" &&
+            ["enrollments", "documents", "account"].includes(state.page))
+            ? "active"
+            : ""}"
           data-page="${id}"
         >
           ${icon(ico, 20)}<span>${label}</span>
@@ -153,15 +161,10 @@ function renderShell(content) {
         <div>
           <strong
             >Sistema de Gestión de Matrícula y Mensualidades de Primaria</strong
-          ><small>Administración escolar eficiente y segura</small>
+          ><small>Primaria · prototipo local</small>
         </div>
       </div>
       <div class="top-right">
-        <div class="slogan">
-          ${icon("graduation-cap", 28)}<span
-            >Educación de hoy,<br />mejores oportunidades mañana</span
-          >
-        </div>
         <div class="user-chip">
           <span class="avatar"
             >${state.user.role === "directora" ? "D" : "C"}</span
@@ -184,13 +187,19 @@ function renderShell(content) {
     <div class="layout">
       <aside class="sidebar">
         <nav>${links}</nav>
-        <div class="side-art">
-          <img src="./assets/school.svg" alt="Ilustración de escuela" />
-        </div>
       </aside>
       <main id="main">${content}</main>
     </div>`;
   icons();
+  configureInputs();
+  state.formBaseline = formSignature();
+  if (document.querySelector("#student-search")) {
+    document.querySelector("#student-search").value = state.search || "";
+    document.querySelector("#student-grade").value = state.gradeFilter || "";
+    filterStudentTable();
+  }
+  document.querySelector("#main")?.setAttribute("tabindex", "-1");
+  document.querySelector("#main")?.focus({ preventScroll: true });
 }
 function login() {
   app.innerHTML = /* HTML */ `<header class="topbar login-header">
@@ -199,7 +208,7 @@ function login() {
         <div>
           <strong
             >Sistema de Gestión de Matrícula y Mensualidades de Primaria</strong
-          ><small>Administración escolar eficiente y segura</small>
+          ><small>Primaria · prototipo local</small>
         </div>
       </div>
       <div class="slogan">
@@ -268,8 +277,30 @@ function login() {
 }
 async function loadStudents() {
   state.students = await api("/students");
+  const enrollments = await api("/enrollments");
+  const payments = await api("/payments");
+  const available = new Set([
+    ...years.map((y) => Number(y[0])),
+    ...state.students.map((s) => s.school_year),
+    ...enrollments.map((e) => e.school_year),
+    ...payments.map((p) => p.school_year),
+  ]);
+  years.splice(
+    0,
+    years.length,
+    ...[...available].sort((a, b) => a - b).map((y) => [y, y]),
+  );
 }
 async function go(page) {
+  if (
+    state.dirty &&
+    !(await confirmAction(
+      "Cambios sin guardar",
+      "¿Desea abandonar los cambios de esta tarea?",
+    ))
+  )
+    return;
+  state.dirty = false;
   state.page = page;
   state.loading = true;
   renderShell(
@@ -295,11 +326,16 @@ async function go(page) {
   state.loading = false;
 }
 async function dashboard() {
-  const d = await api(`/dashboard?year=${yearNow()}`);
+  const d = await api(`/dashboard?year=${state.year}`);
   const stats = [
     ["Estudiantes registrados", d.stats.students, "users-round", "blue"],
     ["Matrículas activas", d.stats.enrollments, "clipboard-list", "green"],
-    ["Pagos del mes", money(d.stats.payments_cents), "credit-card", "gold"],
+    [
+      "Pagos del año lectivo",
+      money(d.stats.payments_cents),
+      "credit-card",
+      "gold",
+    ],
     ["Documentos pendientes", d.stats.documents, "file-warning", "red"],
   ];
   const bars = Array.from(
@@ -308,15 +344,21 @@ async function dashboard() {
   );
   const max = Math.max(...bars, 1);
   return /* HTML */ `${pageTitle(
-      "Panel principal",
-      "Resumen general del sistema escolar",
+      "Inicio",
+      "Resumen operativo del año lectivo seleccionado.",
     )}
-    <div class="hero">
-      <div>
-        <h2>Panel principal</h2>
-        <p>Resumen general del sistema escolar</p>
-      </div>
-      <img src="./assets/school.svg" alt="Escuela" />
+    <div class="page-tools">
+      ${yearSelect()}${actionButton(
+        "new-student",
+        "Registrar estudiante",
+        "plus",
+      )}${actionButton(
+        "open-list",
+        "Abrir expediente",
+        "search",
+        "outline",
+      )}<button class="btn primary" data-page="payments">Registrar pago</button
+      ><button class="btn outline" data-page="reports">Reportes</button>
     </div>
     <div class="stats">
       ${stats
@@ -331,25 +373,30 @@ async function dashboard() {
     </div>
     <div class="dashboard-grid">
       ${card(
-        "Pagos por mes",
+        `Recepción ${state.year} · cargos ${state.year} · C$`,
         "chart-no-axes-column",
-        /* HTML */ `<div class="chart">
-          ${bars
-            .map(
-              (b, i) =>
-                /* HTML */ `<div class="bar-cell">
-                  <div
-                    class="bar"
-                    style="height:${Math.max(4, Math.round((b / max) * 100))}%"
-                    title="${months[i]}: ${money(b)}"
-                  ></div>
-                  <small>${months[i].slice(0, 3)}</small>
-                </div>`,
-            )
-            .join("")}
-        </div>`,
+        bars.some(Boolean)
+          ? /* HTML */ `<div class="chart">
+              ${bars
+                .map(
+                  (b, i) =>
+                    /* HTML */ `<div class="bar-cell">
+                      <div
+                        class="bar"
+                        style="height:${Math.round((b / max) * 100)}%"
+                        title="${months[i]}: ${money(b)}"
+                      ></div>
+                      <small>${months[i].slice(0, 3)}<br />${money(b)}</small>
+                    </div>`,
+                )
+                .join("")}
+            </div>`
+          : empty(
+              "Sin pagos recibidos",
+              "No hay pagos recibidos en este año para sus cargos lectivos.",
+            ),
       )}${card(
-        "Actividades recientes",
+        "Actividad reciente · todos los períodos",
         "clock-3",
         d.activity.length
           ? /* HTML */ `<div class="activity-list">
@@ -370,27 +417,9 @@ async function dashboard() {
               "Las acciones registradas aparecerán aquí.",
             ),
       )}
-    </div>
-    ${card(
-      "Accesos rápidos",
-      "zap",
-      /* HTML */ `<div class="quick-grid">
-        ${[
-          ["students", "Registrar estudiante", "user-round-plus"],
-          ["enrollments", "Nueva matrícula", "clipboard-plus"],
-          ["payments", "Registrar pago", "credit-card"],
-          ["account", "Consultar estado", "search"],
-        ]
-          .map(
-            ([p, l, i]) =>
-              /* HTML */ `<button class="quick" data-page="${p}">
-                ${icon(i, 24)}<span>${l}</span>${icon("arrow-right", 18)}
-              </button>`,
-          )
-          .join("")}
-      </div>`,
-    )}`;
+    </div> `;
 }
+
 function studentForm(student = {}, guardians = [{}]) {
   return /* HTML */ `<form
     id="student-form"
@@ -515,9 +544,12 @@ async function students() {
       form = studentForm(s, s.guardians);
     } else form = studentForm();
   }
+  if (form)
+    return `${pageTitle("Registrar o editar estudiante", "Los campos con * son obligatorios.")}${form}`;
+  if (state.dossier && state.selectedStudent) return dossier();
   return /* HTML */ `${pageTitle(
-      "Registro de estudiantes",
-      "Complete la información del estudiante y del responsable.",
+      "Estudiantes",
+      "Busque un estudiante y abra su expediente para continuar una tarea.",
       "Estudiantes",
     )}
     <div class="page-tools">
@@ -527,14 +559,20 @@ async function students() {
       "Estudiantes registrados",
       "users-round",
       /* HTML */ `<div class="filters">
-          <label class="input-icon"
-            >${icon("search", 18)}<input
+          <label class="field"
+            ><span>Buscar por nombre o código</span
+            ><input
               id="student-search"
-              placeholder="Buscar por nombre o código" /></label
-          ><select id="student-grade">
-            <option value="">Todos los grados</option>
-            ${grades.map((g) => option(g[0], g[1])).join("")}
-          </select>
+              type="search"
+              placeholder="Nombre o EST-0001"
+          /></label>
+          <label class="field"
+            ><span>Grado</span
+            ><select id="student-grade">
+              <option value="">Todos los grados</option>
+              ${grades.map((g) => option(g[0], g[1])).join("")}
+            </select></label
+          >
         </div>
         <div id="student-table">${studentTable(state.students)}</div>`,
     )}`;
@@ -591,7 +629,11 @@ function studentTable(rows) {
       );
 }
 async function enrollments() {
-  const list = await api("/enrollments");
+  const list = (await api("/enrollments")).filter(
+    (e) =>
+      e.student_id === state.selectedStudent &&
+      e.school_year === Number(state.year),
+  );
   return /* HTML */ `${pageTitle(
       "Prematrícula y matrícula",
       "Registre solicitudes y confirme las matrículas del año lectivo.",
@@ -602,20 +644,20 @@ async function enrollments() {
         "Nueva solicitud",
         "clipboard-plus",
         /* HTML */ `<form id="enrollment-form" class="stack-form">
-          ${select(
-            "Estudiante",
-            "student_id",
-            studentOptions(),
-            state.selectedStudent,
-          )}${select("Grado solicitado", "grade", [
-            ["", "Seleccione"],
-            ...grades,
-          ])}${select("Año lectivo", "school_year", years, yearNow())}${field(
-            "Fecha",
-            "date",
-            today(),
-            "date",
-          )}${select(
+          <input
+            type="hidden"
+            name="student_id"
+            value="${state.selectedStudent}"
+          />${select(
+            "Grado solicitado",
+            "grade",
+            grades,
+            state.students.find((s) => s.id === state.selectedStudent)?.grade,
+          )}<input
+            type="hidden"
+            name="school_year"
+            value="${state.year}"
+          />${field("Fecha", "date", today(), "date")}${select(
             "Tipo",
             "status",
             [
@@ -692,7 +734,7 @@ async function enrollments() {
     </div>`;
 }
 async function documents() {
-  const id = state.selectedStudent || state.students[0]?.id;
+  const id = state.selectedStudent;
   const selected = state.students.find((s) => s.id === Number(id));
   const docs = id ? await api(`/students/${id}/documents`) : [];
   return /* HTML */ `${pageTitle(
@@ -763,114 +805,76 @@ async function documents() {
     )}`;
 }
 async function payments() {
-  const rows = await api("/payments");
-  const month = new Date().getMonth() + 1;
-  const current = rows.filter(
-    (p) =>
-      p.status === "Válido" && p.paid_at.slice(0, 7) === today().slice(0, 7),
+  const id = state.selectedStudent;
+  const charges = id
+    ? (await api(`/charges?student_id=${id}`)).filter(
+        (c) => c.school_year === Number(state.year),
+      )
+    : [];
+  state.charges = charges;
+  const rows = await api(
+    `/payments?year=${state.year}${id ? `&student_id=${id}` : ""}`,
   );
-  const id = state.selectedStudent || state.students[0]?.id;
-  const charges = id ? await api(`/charges?student_id=${id}`) : [];
-  return /* HTML */ `${pageTitle(
-      "Pagos y mensualidades",
-      "Registro de pagos, abonos y control de mensualidades.",
+  return `${pageTitle("Caja", "Seleccione un estudiante y el año lectivo de la obligación.")}
+    ${tabs(
+      [
+        ["pay", "Registrar pago o abono"],
+        ["charge", "Crear mensualidad"],
+        ["history", "Historial"],
+      ],
+      state.cashTab,
+      "cash-tab",
     )}
-    <div class="payments-top">
-      ${card(
-        "Buscar y filtrar",
-        "search",
-        /* HTML */ `<div class="filters">
-          <label class="input-icon"
-            >${icon("search", 18)}<input
-              id="payment-search"
-              placeholder="Nombre del estudiante" /></label
-          ><select id="payment-month">
-            <option value="">Todos los meses</option>
-            ${months.map((m, i) => option(i + 1, m)).join("")}</select
-          ><select id="payment-concept">
-            <option value="">Todos los conceptos</option>
-            <option>Matrícula</option>
-            <option>Mensualidad</option>
-          </select>
-        </div>`,
-      )}${card(
-        "Resumen del mes",
-        "chart-no-axes-column",
-        /* HTML */ `<div class="mini-stats">
-          <div>
-            <span>Pagos registrados</span><strong>${current.length}</strong>
-          </div>
-          <div>
-            <span>Total del mes</span
-            ><strong class="green-text"
-              >${money(current.reduce((a, p) => a + p.amount_cents, 0))}</strong
-            >
-          </div>
-        </div>`,
-      )}
-    </div>
-    <div class="two-col">
-      ${card(
-        "Registrar cargo y pago",
-        "credit-card",
-        /* HTML */ `<form id="charge-form" class="stack-form">
-            <h3>Nueva mensualidad</h3>
-            ${select("Estudiante", "student_id", studentOptions(), id)}${select(
-              "Año lectivo",
-              "school_year",
-              years,
-              yearNow(),
-            )}${select(
-              "Mes",
-              "month",
-              months.map((m, i) => [i + 1, m]),
-              month,
-            )}${field(
-              "Monto (C$)",
-              "amount",
-              "",
-              "number",
-              true,
-              'min="0.01" step="0.01"',
-            )}<button class="btn outline" type="submit">
-              ${icon("plus", 18)} Crear mensualidad
-            </button>
-          </form>
-          <form id="payment-form" class="stack-form with-divider">
-            <h3>Registrar pago o abono</h3>
-            ${select("Estudiante", "student_id", studentOptions(), id)}<label
-              class="field"
-              ><span>Cargo *</span
-              ><select name="charge_id" id="payment-charge" required>
-                ${chargeOptions(charges)}
-              </select></label
-            >${field(
-              "Monto del abono (C$)",
-              "amount",
-              "",
-              "number",
-              true,
-              'min="0.01" step="0.01"',
-            )}<button class="btn primary" type="submit">
-              ${icon("credit-card", 18)} Registrar pago
-            </button>
-          </form>`,
-      )}${card(
-        "Cargos del estudiante",
-        "receipt",
-        charges.length
-          ? chargeTable(charges)
-          : empty(
-              "Sin cargos",
-              "Seleccione un estudiante con matrícula activa y cree una mensualidad.",
-            ),
-      )}
-    </div>
-    ${card(
-      "Listado de pagos y mensualidades",
-      "list",
-      /* HTML */ `<div id="payment-table">${paymentTable(rows)}</div>`,
-    )}`;
+    <div class="selection-bar"><label class="field"><span>Buscar estudiante por nombre o código</span><input id="cash-search" type="search" placeholder="Escriba para filtrar opciones"></label>${select("Estudiante", "selected_student", studentOptions(), id)}${yearSelect()}</div>
+    ${
+      state.cashTab === "history"
+        ? card(
+            "Historial · año lectivo seleccionado",
+            "history",
+            `<div class="filters"><label class="field"><span>Buscar por nombre</span><input id="payment-search" type="search" value="${h(state.paymentSearch || "")}"></label><label class="field"><span>Mes de la obligación</span><select id="payment-month">${option("", "Todos los meses", state.paymentMonth)}${months.map((m, i) => option(i + 1, m, state.paymentMonth)).join("")}</select></label><label class="field"><span>Concepto</span><select id="payment-concept">${["", "Matrícula", "Mensualidad"].map((c) => option(c, c || "Todos los conceptos", state.paymentConcept)).join("")}</select></label></div><div id="payment-table">${paymentTable(rows.filter((p) => (!state.paymentMonth || p.month === Number(state.paymentMonth)) && (!state.paymentConcept || p.concept === state.paymentConcept) && (!state.paymentSearch || p.student_name.toLocaleLowerCase("es").includes(state.paymentSearch.toLocaleLowerCase("es")))))}</div>`,
+          )
+        : !id
+          ? empty(
+              "Seleccione un estudiante",
+              "Busque y elija uno para continuar. No se ha seleccionado ninguno automáticamente.",
+            )
+          : state.cashTab === "charge"
+            ? card(
+                "Crear cargo de mensualidad",
+                "plus",
+                `<form id="charge-form" class="stack-form"><input type="hidden" name="student_id" value="${id}"><input type="hidden" name="school_year" value="${state.year}">${select(
+                  "Mes",
+                  "month",
+                  months.map((m, i) => [i + 1, m]),
+                  new Date().getMonth() + 1,
+                )}${field("Monto (C$)", "amount", "", "number", true, 'min="0.01" step="0.01"')}<button class="btn primary">Crear mensualidad</button></form>`,
+              )
+            : card(
+                "Registrar pago o abono",
+                "credit-card",
+                `<form id="payment-form" class="stack-form"><label class="field"><span>Obligación pendiente *</span><select name="charge_id" id="payment-charge" required>${chargeOptions(charges)}</select></label><div id="charge-review" aria-live="polite">Seleccione la obligación para revisar sus importes.</div>${field("Monto del abono (C$)", "amount", "", "number", true, 'min="0.01" step="0.01"')}<output id="remaining" aria-live="polite"></output><button class="btn primary">Registrar pago</button></form>`,
+              )
+    }
+    ${
+      id && state.cashTab !== "history"
+        ? `<details><summary>Consultar cargos y descuentos del período</summary>${chargeTable(charges)}${
+            state.user.role === "directora"
+              ? charges
+                  .filter((c) => !c.discount_cents && c.balance_cents)
+                  .map((c) =>
+                    actionButton(
+                      "discount-charge",
+                      `Descuento: ${c.concept} ${c.month ? monthLabel(c.month) : ""}`,
+                      "badge-percent",
+                      "outline",
+                      `data-id="${c.id}"`,
+                    ),
+                  )
+                  .join("")
+              : ""
+          }</details>`
+        : ""
+    }`;
 }
 function chargeOptions(charges) {
   const open = charges.filter((c) => c.balance_cents > 0);
@@ -910,7 +914,13 @@ function chargeTable(charges) {
                 </td>
                 <td>${c.school_year}</td>
                 <td>${money(c.amount_cents)}</td>
-                <td>${money(c.discount_cents)}</td>
+                <td>
+                  ${money(c.discount_cents)}<small
+                    >${h(c.discount_reason || "")}${c.discount_percent
+                      ? `<br>${c.discount_percent}% · ${h(c.discount_basis)}<br>${h(c.discount_author)} · ${fmtDate(c.discount_date)}`
+                      : ""}</small
+                  >
+                </td>
                 <td>${money(c.paid_cents)}</td>
                 <td>
                   <strong class="${c.balance_cents ? "red-text" : "green-text"}"
@@ -932,7 +942,7 @@ function paymentTable(rows) {
             <tr>
               <th>Estudiante</th>
               <th>Concepto</th>
-              <th>Fecha</th>
+              <th>Fecha de recepción</th>
               <th>Monto</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -948,7 +958,10 @@ function paymentTable(rows) {
                       ><small>Comprobante #${p.id}</small>
                     </td>
                     <td>
-                      ${h(p.concept)} ${p.month ? monthLabel(p.month) : ""}
+                      ${h(p.concept)}
+                      ${p.month ? monthLabel(p.month) : ""}<small
+                        >Año lectivo: ${p.school_year}</small
+                      >
                     </td>
                     <td>${fmtDate(p.paid_at)}</td>
                     <td>${money(p.amount_cents)}</td>
@@ -980,8 +993,8 @@ function paymentTable(rows) {
     : empty("Sin pagos registrados", "Los pagos y abonos aparecerán aquí.");
 }
 async function account() {
-  const id = state.selectedStudent || state.students[0]?.id;
-  const a = id ? await api(`/students/${id}/account`) : null;
+  const id = state.selectedStudent;
+  const a = id ? await api(`/students/${id}/account?year=${state.year}`) : null;
   return /* HTML */ `${pageTitle(
       "Estado de cuenta",
       "Consulte los pagos, mensualidades y saldo del estudiante.",
@@ -1049,184 +1062,64 @@ async function account() {
           "Registre o seleccione un estudiante para consultar su cuenta.",
         )}`;
 }
-async function discounts() {
-  const rows = await api("/discounts");
-  const id = state.selectedStudent || state.students[0]?.id;
-  const charges = id ? await api(`/charges?student_id=${id}`) : [];
-  return /* HTML */ `${pageTitle(
-      "Descuentos autorizados",
-      "La directora puede aplicar descuentos a cargos pendientes.",
-      "Descuentos",
-    )}
-    <div class="two-col">
-      ${card(
-        "Autorizar descuento",
-        "badge-percent",
-        /* HTML */ `<form id="discount-form" class="stack-form">
-          ${select("Estudiante", "student_id", studentOptions(), id)}<label
-            class="field"
-            ><span>Cargo *</span
-            ><select name="charge_id" id="discount-charge" required>
-              <option value="">Seleccione un cargo</option>
-              ${charges
-                .filter((c) => !c.discount_cents)
-                .map((c) =>
-                  option(
-                    c.id,
-                    `${c.concept} ${c.month ? monthLabel(c.month) : ""} — ${money(c.amount_cents)}`,
-                  ),
-                )
-                .join("")}
-            </select></label
-          >${field(
-            "Motivo",
-            "reason",
-            "",
-            "text",
-            true,
-            'placeholder="Por ejemplo, dos o más hermanos"',
-          )}${field(
-            "Porcentaje autorizado",
-            "percent",
-            10,
-            "number",
-            true,
-            'min="1" max="100"',
-          )}${select(
-            "Base del descuento",
-            "basis",
-            [
-              ["Monto original del cargo", "Monto original del cargo"],
-              ["Saldo pendiente del cargo", "Saldo pendiente del cargo"],
-            ],
-            "Monto original del cargo",
-          )}
-          <p class="hint">
-            Para hermanos, confirme la política del centro y elija la base antes
-            de autorizar el 10 %.
-          </p>
-          <button class="btn primary" type="submit">
-            ${icon("check", 18)} Autorizar descuento
-          </button>
-        </form>`,
-      )}${card(
-        "Historial de descuentos",
-        "list",
-        rows.length
-          ? /* HTML */ `<div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Estudiante</th>
-                    <th>Cargo</th>
-                    <th>Motivo</th>
-                    <th>Descuento</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows
-                    .map(
-                      (d) =>
-                        /* HTML */ `<tr>
-                          <td>${h(d.student_name)}</td>
-                          <td>
-                            ${h(d.concept)}
-                            ${d.month ? monthLabel(d.month) : ""}
-                          </td>
-                          <td>
-                            ${h(d.reason)}<small
-                              >${d.percent}% · ${h(d.basis)}</small
-                            >
-                          </td>
-                          <td>
-                            ${money(d.discount_cents)}<small
-                              >Final: ${money(d.final_cents)}</small
-                            >
-                          </td>
-                        </tr>`,
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            </div>`
-          : empty(
-              "Sin descuentos",
-              "Los descuentos autorizados aparecerán aquí.",
-            ),
-      )}
-    </div>`;
-}
-async function reports() {
+async function reportBody() {
   const [d, p, e] = await Promise.all([
-    api(`/dashboard?year=${yearNow()}`),
-    api("/payments"),
+    api(`/dashboard?year=${state.year}`),
+    api(`/payments?year=${state.year}`),
     api("/enrollments"),
   ]);
   const valid = p.filter((x) => x.status === "Válido");
-  return /* HTML */ `${pageTitle(
-      "Reportes",
-      "Resumen administrativo y financiero del año lectivo.",
-    )}
-    <div class="page-tools">
-      ${actionButton("print-account", "Imprimir reporte", "printer", "outline")}
-    </div>
-    <div class="stats">
-      ${[
-        ["Estudiantes", d.stats.students, "users-round", "blue"],
-        ["Matrículas activas", d.stats.enrollments, "clipboard-list", "green"],
-        ["Pagos válidos", valid.length, "credit-card", "gold"],
-        ["Documentos pendientes", d.stats.documents, "file-warning", "red"],
-      ]
+  return `<p>Año lectivo: ${state.year}. Los pagos se agrupan por año de la obligación, aunque se reciban en otra fecha. Documentos: estado actual de estudiantes vinculados al período.</p><div class="account-stats"><div>Estudiantes <strong>${d.stats.students}</strong></div><div>Matrículas activas <strong>${d.stats.enrollments}</strong></div><div>Pagos válidos <strong>${valid.length}</strong></div><div>Documentos pendientes <strong>${d.stats.documents}</strong></div></div><h2>Matrículas por grado</h2>${grades.map(([n, l]) => `<p>${l}: ${e.filter((x) => x.grade === n && x.status === "Activa" && x.school_year === Number(state.year)).length}</p>`).join("")}<h2>Pagos por concepto · C$</h2>${["Matrícula", "Mensualidad"].map((c) => `<p>${c}: ${money(valid.filter((p) => p.concept === c).reduce((a, p) => a + p.amount_cents, 0))}</p>`).join("")}<p>Total recibido para el año lectivo: ${money(valid.reduce((a, p) => a + p.amount_cents, 0))}</p>`;
+}
+async function reports() {
+  return `${pageTitle("Reportes", "Resumen administrativo del año lectivo.")}<div class="page-tools">${yearSelect()}${actionButton("print-report", "Imprimir reporte", "printer", "outline")}</div>${await reportBody()}`;
+}
+async function dossier() {
+  const s = await api(`/students/${state.selectedStudent}`);
+  const heading = `${actionButton("open-list", "Volver al listado", "arrow-left", "quiet")}${pageTitle(`${h(s.names)} ${h(s.surnames)}`, `EST-${String(s.id).padStart(4, "0")} · ${grade(s.grade)} · año registrado ${s.school_year}`)}<div class="page-tools">${yearSelect(state.tab === "account")}${actionButton("pay-student", "Registrar pago", "credit-card")}</div>${tabs(
+    [
+      ["data", "Datos y responsables"],
+      ["enrollments", "Matrícula"],
+      ["documents", "Documentos"],
+      ["account", "Estado de cuenta"],
+    ],
+    state.tab,
+    "student-tab",
+  )}`;
+  if (state.tab !== "data") {
+    const html = await { enrollments, documents, account }[state.tab]();
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    template.content
+      .querySelectorAll(".page-heading,.student-banner,.selection-bar")
+      .forEach((el) => el.remove());
+    if (state.tab === "account")
+      return (
+        heading +
+        actionButton("print-account", "Imprimir estado", "printer", "outline") +
+        `<p>Alcance: ${state.year || "Todos los años"} · saldos actuales.</p>` +
+        template.innerHTML
+      );
+    return heading + template.innerHTML;
+  }
+  return (
+    heading +
+    card(
+      "Datos del estudiante",
+      "user",
+      `<p>Nacimiento: ${fmtDate(s.birth_date)} · ${h(s.sex)} · ${h(s.status)}</p><p>Dirección: ${h(s.address)}</p>${actionButton("edit-student", "Editar datos y responsables", "pencil", "outline", `data-id="${s.id}"`)}`,
+    ) +
+    card(
+      "Responsables",
+      "users",
+      s.guardians
         .map(
-          ([l, v, i, c]) =>
-            /* HTML */ `<div class="stat card">
-              <span class="stat-icon ${c}">${icon(i, 27)}</span>
-              <div><span>${l}</span><strong>${v}</strong></div>
-            </div>`,
+          (g) =>
+            `<p><strong>${h(g.names)} ${h(g.surnames)}</strong> · ${h(g.relationship)}<br>Teléfono: ${h(g.phone)} · ${h(g.address)}<br>${h(g.email || "")} ${h(g.identity_number || "")}</p>`,
         )
-        .join("")}
-    </div>
-    <div class="two-col">
-      ${card(
-        "Matrículas por grado",
-        "graduation-cap",
-        grades
-          .map(
-            ([n, l]) =>
-              /* HTML */ `<div class="report-row">
-                <span>${l}</span
-                ><strong
-                  >${e.filter((x) => x.grade === n && x.status === "Activa")
-                    .length}</strong
-                >
-              </div>`,
-          )
-          .join(""),
-      )}${card(
-        "Pagos por concepto",
-        "credit-card",
-        /* HTML */ `<div class="report-row">
-            <span>Matrículas</span
-            ><strong
-              >${money(
-                valid
-                  .filter((x) => x.concept === "Matrícula")
-                  .reduce((a, x) => a + x.amount_cents, 0),
-              )}</strong
-            >
-          </div>
-          <div class="report-row">
-            <span>Mensualidades</span
-            ><strong
-              >${money(
-                valid
-                  .filter((x) => x.concept === "Mensualidad")
-                  .reduce((a, x) => a + x.amount_cents, 0),
-              )}</strong
-            >
-          </div>`,
-      )}
-    </div>`;
+        .join(""),
+    )
+  );
 }
 const views = {
   dashboard,
@@ -1236,79 +1129,185 @@ const views = {
   payments,
   account,
   reports,
-  discounts,
 };
 async function refresh() {
   await go(state.page);
 }
 function printSection(title, body) {
-  const win = window.open("", "_blank");
-  if (!win)
-    return notify(
-      "Permita las ventanas emergentes para imprimir",
-      "",
-      "warning",
-    );
-  win.document.write(
-    /* HTML */ `<!doctype html>
-      <html lang="es">
-        <head>
-          <meta charset="utf-8" />
-          <title>${h(title)}</title>
-          <style>
-            body {
-              font: 15px Arial;
-              margin: 35px;
-              color: #102257;
-            }
-            h1 {
-              font-size: 23px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            th,
-            td {
-              text-align: left;
-              padding: 9px;
-              border-bottom: 1px solid #d9e3ef;
-            }
-            small {
-              display: block;
-              color: #60769a;
-            }
-            .badge {
-              color: #12744a;
-            }
-            .row-actions,
-            button {
-              display: none;
-            }
-            .total {
-              margin-top: 20px;
-              font-weight: bold;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>${h(title)}</h1>
-          <p>Fecha de emisión: ${new Date().toLocaleDateString("es-NI")}</p>
-          ${body}
-        </body>
-      </html>`,
-  );
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 250);
+  const dialog = document.createElement("dialog");
+  dialog.className = "print-preview";
+  dialog.innerHTML =
+    '<div class="page-tools"><button class="btn primary" data-print>Imprimir</button><button class="btn outline" data-close>Cerrar vista previa</button></div><iframe title="Vista previa del comprobante"></iframe>';
+  document.body.append(dialog);
+  const frame = dialog.querySelector("iframe");
+  frame.srcdoc = /* HTML */ `<!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <title>${h(title)}</title>
+        <style>
+          body {
+            font: 15px Arial;
+            margin: 35px;
+            color: #102257;
+          }
+          h1 {
+            font-size: 23px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th,
+          td {
+            text-align: left;
+            padding: 9px;
+            border-bottom: 1px solid #d9e3ef;
+          }
+          small {
+            display: block;
+            color: #60769a;
+          }
+          .badge {
+            color: #12744a;
+          }
+          .row-actions,
+          button {
+            display: none;
+          }
+          .total {
+            margin-top: 20px;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <p>Sistema de Gestión de Matrícula y Mensualidades de Primaria</p>
+        <h1>${h(title)}</h1>
+        <p>Fecha de emisión: ${new Date().toLocaleDateString("es-NI")}</p>
+        ${body}
+      </body>
+    </html>`;
+  dialog.querySelector("[data-print]").onclick = () =>
+    frame.contentWindow.print();
+  dialog.querySelector("[data-close]").onclick = () => dialog.close();
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
 }
+
 async function handleAction(button) {
   const action = button.dataset.action,
     id = button.dataset.id;
+  if (
+    [
+      "logout",
+      "new-student",
+      "cancel-student",
+      "edit-student",
+      "view-student",
+    ].includes(action)
+  ) {
+    if (
+      state.dirty &&
+      !(await confirmAction(
+        "Cambios sin guardar",
+        "¿Desea abandonar los cambios de esta tarea?",
+      ))
+    )
+      return;
+    state.dirty = false;
+  }
+  if (
+    ["open-list", "student-tab", "cash-tab", "pay-student"].includes(action)
+  ) {
+    if (
+      state.dirty &&
+      !(await confirmAction(
+        "Cambios sin guardar",
+        "¿Desea abandonar los cambios?",
+      ))
+    )
+      return;
+    state.dirty = false;
+    if (action === "open-list") {
+      state.dossier = false;
+      state.showStudentForm = false;
+      return go("students");
+    }
+    if (action === "pay-student") {
+      state.cashTab = "pay";
+      if (!state.year) state.year = yearNow();
+      return go("payments");
+    }
+    if (action === "cash-tab") state.cashTab = button.dataset.tab;
+    else {
+      state.tab = button.dataset.tab;
+      if (!state.year && state.tab !== "account") state.year = yearNow();
+    }
+    return refresh();
+  }
+  if (action === "print-report")
+    return printSection("Reporte administrativo", await reportBody());
+  if (action === "copy-address") {
+    button
+      .closest(".guardian-block")
+      .querySelector('[name="g_address"]').value =
+      document.querySelector('[name="address"]').value;
+    state.dirty = true;
+    return;
+  }
+  if (action === "discount-charge") {
+    const c = state.charges.find((c) => c.id === Number(id));
+    const r = await Swal.fire({
+      title: "Autorizar descuento",
+      html: `<p>${h(c.concept)} · ${state.year} · cargo ${money(c.amount_cents)} · pagado ${money(c.paid_cents)}</p><label>Porcentaje<input id="disc-percent" type="number" min="1" max="100" value="10" class="swal2-input"></label><label>Base<select id="disc-basis" class="swal2-input"><option>Monto original del cargo</option><option>Saldo pendiente del cargo</option></select></label><label>Motivo<input id="disc-reason" class="swal2-input"></label><p id="disc-preview" aria-live="polite"></p>`,
+      showCancelButton: true,
+      confirmButtonText: "Autorizar",
+      cancelButtonText: "Cancelar",
+      didOpen: () => {
+        const update = () => {
+          const base = document.querySelector("#disc-basis").selectedIndex
+            ? c.balance_cents
+            : c.amount_cents;
+          const d = Math.round(
+            (base * Number(document.querySelector("#disc-percent").value)) /
+              100,
+          );
+          document.querySelector("#disc-preview").textContent =
+            `Descuento: ${money(d)} · Saldo resultante: ${money(c.balance_cents - d)}`;
+        };
+        document.querySelector("#disc-percent").oninput = update;
+        document.querySelector("#disc-basis").onchange = update;
+        update();
+      },
+      preConfirm: async () => {
+        try {
+          await api("/discounts", {
+            method: "POST",
+            body: {
+              charge_id: c.id,
+              percent: document.querySelector("#disc-percent").value,
+              basis: document.querySelector("#disc-basis").value,
+              reason: document.querySelector("#disc-reason").value,
+            },
+          });
+          return true;
+        } catch (e) {
+          Swal.showValidationMessage(e.message);
+          return false;
+        }
+      },
+    });
+    if (r.isConfirmed) return refreshCashDraft();
+    return;
+  }
   if (action === "logout") {
     await api("/logout", { method: "POST" });
     state.user = null;
+    state.selectedStudent = null;
+    state.dossier = false;
+    state.year = yearNow();
     login();
     return;
   }
@@ -1321,7 +1320,7 @@ async function handleAction(button) {
   if (action === "new-student") {
     state.showStudentForm = true;
     state.editingStudent = null;
-    return refresh();
+    return go("students");
   }
   if (action === "cancel-student") {
     state.showStudentForm = false;
@@ -1339,7 +1338,9 @@ async function handleAction(button) {
   }
   if (action === "view-student") {
     state.selectedStudent = Number(id);
-    return go("account");
+    state.dossier = true;
+    state.tab = "data";
+    return go("students");
   }
   if (action === "add-guardian") {
     const list = document.querySelector("#guardian-list");
@@ -1347,11 +1348,14 @@ async function handleAction(button) {
       "beforeend",
       guardianFields({}, list.children.length),
     );
+    configureInputs();
+    state.dirty = true;
     icons();
     return;
   }
   if (action === "remove-guardian") {
     button.closest(".guardian-block").remove();
+    state.dirty = true;
     return;
   }
   if (action === "confirm-enrollment") {
@@ -1370,8 +1374,13 @@ async function handleAction(button) {
       method: "POST",
       body: { enrollment_amount: r.value },
     });
-    notify("Matrícula confirmada");
-    return refresh();
+    state.dirty = false;
+    state.tab = "documents";
+    await go("students");
+    return notify(
+      "Matrícula confirmada",
+      "Puede actualizar documentos o registrar un pago desde el expediente.",
+    );
   }
   if (action === "print-enrollment") {
     const e = (await api("/enrollments")).find((x) => x.id === Number(id));
@@ -1380,26 +1389,38 @@ async function handleAction(button) {
       /* HTML */ `<p><strong>Estudiante:</strong> ${h(e.student_name)}</p>
         <p><strong>Grado:</strong> ${grade(e.grade)}</p>
         <p><strong>Año lectivo:</strong> ${e.school_year}</p>
-        <p><strong>Fecha:</strong> ${h(e.date)}</p>
-        <p><strong>Registro:</strong> #${e.id}</p>`,
+        <p><strong>Fecha:</strong> ${fmtDate(e.date)}</p>
+        <p>
+          <strong>Registro:</strong> #${e.id} ·
+          EST-${String(e.student_id).padStart(4, "0")} · ${h(e.status)}
+        </p>
+        ${chargeTable(
+          (await api(`/charges?student_id=${e.student_id}`)).filter(
+            (c) => c.enrollment_id === e.id,
+          ),
+        )}
+        <p>Importes y saldo actuales a la emisión.</p>`,
     );
   }
   if (action === "edit-document") {
     const status = button.dataset.status;
     const result = await Swal.fire({
       title: button.dataset.kind,
-      html: /* HTML */ `<select id="doc-status" class="swal2-input">
+      html: /* HTML */ `<label for="doc-status">Estado documental</label
+        ><select id="doc-status" class="swal2-input">
           <option ${status === "Entregado" ? "selected" : ""}>Entregado</option>
           <option ${status === "Pendiente" ? "selected" : ""}>Pendiente</option>
           <option ${status === "No requerido" ? "selected" : ""}>
             No requerido
           </option></select
+        ><label for="doc-date" id="doc-date-label">Fecha de entrega</label
         ><input
           id="doc-date"
           class="swal2-input"
           type="date"
           value="${h(button.dataset.date || today())}"
-        /><textarea
+        /><label for="doc-notes">Observaciones (opcional)</label
+        ><textarea
           id="doc-notes"
           class="swal2-textarea"
           placeholder="Observaciones"
@@ -1410,11 +1431,31 @@ ${h(button.dataset.notes)}</textarea
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#1069e8",
-      preConfirm: () => ({
-        status: document.querySelector("#doc-status").value,
-        delivered_at: document.querySelector("#doc-date").value,
-        notes: document.querySelector("#doc-notes").value,
-      }),
+      didOpen: () => {
+        const status = document.querySelector("#doc-status"),
+          date = document.querySelector("#doc-date");
+        const update = () => {
+          date.hidden = status.value !== "Entregado";
+          date.required = !date.hidden;
+          document.querySelector("#doc-date-label").hidden = date.hidden;
+        };
+        status.addEventListener("change", update);
+        update();
+      },
+      preConfirm: () => {
+        if (
+          document.querySelector("#doc-status").value === "Entregado" &&
+          !document.querySelector("#doc-date").value
+        ) {
+          Swal.showValidationMessage("Indique la fecha de entrega");
+          return false;
+        }
+        return {
+          status: document.querySelector("#doc-status").value,
+          delivered_at: document.querySelector("#doc-date").value,
+          notes: document.querySelector("#doc-notes").value,
+        };
+      },
     });
     if (!result.isConfirmed) return;
     await api(`/documents/${id}`, { method: "PUT", body: result.value });
@@ -1430,15 +1471,22 @@ ${h(button.dataset.notes)}</textarea
           <strong>Concepto:</strong> ${h(p.concept)}
           ${p.month ? monthLabel(p.month) : ""}
         </p>
-        <p><strong>Fecha:</strong> ${fmtDate(p.paid_at)}</p>
+        <p><strong>Fecha de recepción:</strong> ${fmtDate(p.paid_at)}</p>
         <p><strong>Registrado por:</strong> ${h(p.created_by_name)}</p>
         <p class="total">Monto: ${money(p.amount_cents)}</p>
-        ${p.status === "Anulado" ? "<p>ANULADO</p>" : ""}`,
+        ${p.status === "Anulado"
+          ? `<p><strong>ANULADO</strong> · Motivo: ${h(p.void_reason)} · Por: ${h(p.voided_by_name)} · ${fmtDate(p.voided_at)}</p>`
+          : ""}
+        <p>
+          Año lectivo: ${p.school_year} ·
+          EST-${String(p.student_id).padStart(4, "0")}
+        </p>`,
     );
   }
   if (action === "void-payment") {
     const r = await Swal.fire({
       title: "Anular pago",
+      html: await paymentContext(id),
       input: "textarea",
       inputLabel: "Motivo de anulación",
       showCancelButton: true,
@@ -1453,17 +1501,19 @@ ${h(button.dataset.notes)}</textarea
       method: "POST",
       body: { reason: r.value },
     });
-    notify("Pago anulado", "El saldo fue recalculado.");
-    return refresh();
+    const payment = (await api("/payments")).find((p) => p.id === Number(id));
+    const account = await api(
+      `/students/${payment.student_id}/account?year=${payment.school_year}`,
+    );
+    await refresh();
+    return notify(
+      "Pago anulado",
+      `Saldo actual del estudiante para ${payment.school_year}: ${money(account.totals.balance_cents)}`,
+    );
   }
   if (action === "print-account") {
-    if (state.page === "reports")
-      return printSection(
-        "Reporte administrativo",
-        document.querySelector("#main").innerHTML,
-      );
     const a = await api(
-      `/students/${state.selectedStudent || state.students[0].id}/account`,
+      `/students/${state.selectedStudent}/account?year=${state.year}`,
     );
     return printSection(
       "Estado de cuenta",
@@ -1472,12 +1522,18 @@ ${h(button.dataset.notes)}</textarea
           ${h(a.student.surnames)}
         </p>
         <p>
-          <strong>Grado:</strong> ${grade(a.student.grade)} ·
-          ${a.student.school_year}
+          <strong>Grado registrado:</strong> ${grade(a.student.grade)} · año
+          registrado ${a.student.school_year}
+        </p>
+        <p>
+          Alcance: ${state.year || "Todos los años"}. Saldos actuales a la fecha
+          de emisión.
         </p>
         ${chargeTable(a.charges)}
         <p class="total">
-          Total pagado: ${money(a.totals.paid_cents)} · Saldo pendiente:
+          Total cargado: ${money(a.totals.charged_cents)} · Descuentos:
+          ${money(a.totals.discount_cents)} · Total pagado:
+          ${money(a.totals.paid_cents)} · Saldo pendiente:
           ${money(a.totals.balance_cents)}
         </p>`,
     );
@@ -1486,7 +1542,18 @@ ${h(button.dataset.notes)}</textarea
 document.addEventListener("click", async (event) => {
   const navButton = event.target.closest("[data-page]");
   if (navButton) {
+    if (
+      state.dirty &&
+      !(await confirmAction(
+        "Cambios sin guardar",
+        "¿Desea abandonar los cambios de esta tarea?",
+      ))
+    )
+      return;
+    state.dirty = false;
     state.showStudentForm = false;
+    if (!state.year && navButton.dataset.page !== "students")
+      state.year = yearNow();
     return go(navButton.dataset.page);
   }
   const button = event.target.closest("[data-action]");
@@ -1499,33 +1566,169 @@ document.addEventListener("click", async (event) => {
 });
 document.addEventListener("change", async (event) => {
   const el = event.target;
-  if (
-    el.name === "selected_student" ||
-    (el.name === "student_id" &&
-      ["charge-form", "payment-form", "discount-form"].includes(el.form?.id))
-  ) {
-    state.selectedStudent = Number(el.value) || null;
-    await refresh();
+  if (el.name === "selected_student" || el.name === "context_year") {
+    const previous =
+      el.name === "selected_student" ? state.selectedStudent : state.year;
+    if (
+      state.dirty &&
+      !(await confirmAction(
+        "Cambios sin guardar",
+        "Cambiar el contexto descartará el formulario actual. ¿Continuar?",
+      ))
+    ) {
+      el.value = previous ?? "";
+      return;
+    }
+    state.dirty = false;
+    if (el.name === "selected_student")
+      state.selectedStudent = Number(el.value) || null;
+    else state.year = el.value;
+    if (state.page === "payments") {
+      const template = document.createElement("template");
+      template.innerHTML = await payments();
+      const main = document.querySelector("#main"),
+        selection = main.querySelector(".selection-bar");
+      while (selection.nextSibling) selection.nextSibling.remove();
+      const fresh = template.content.querySelector(".selection-bar");
+      while (fresh.nextSibling) main.append(fresh.nextSibling);
+      configureInputs();
+      state.formBaseline = formSignature();
+      icons();
+      return;
+    }
+    // Year changes inside the dossier update its task area and leave the shell intact.
+    const main = document.querySelector("#main");
+    main.innerHTML = await views[state.page]();
+    configureInputs();
+    state.formBaseline = formSignature();
+    icons();
+    return;
   }
+  if (el.closest("form") && el.form?.id !== "login-form")
+    state.dirty = formSignature() !== state.formBaseline;
   if (el.id === "student-grade") filterStudentTable();
   if (el.id === "payment-month" || el.id === "payment-concept")
     filterPaymentTable();
+  if (el.id === "payment-charge") updatePaymentPreview();
+  configureInputs();
 });
 document.addEventListener("input", (event) => {
-  if (event.target.id === "student-search") filterStudentTable();
-  if (event.target.id === "payment-search") filterPaymentTable();
+  const el = event.target;
+  if (el.closest("form") && el.form?.id !== "login-form")
+    state.dirty = formSignature() !== state.formBaseline;
+  el.setCustomValidity?.("");
+  if (el.id === "student-search") filterStudentTable();
+  if (el.id === "payment-search") filterPaymentTable();
+  if (el.id === "cash-search") {
+    const q = el.value.toLocaleLowerCase("es");
+    document
+      .querySelectorAll('[name="selected_student"] option')
+      .forEach(
+        (o) =>
+          (o.hidden =
+            !!o.value && !o.textContent.toLocaleLowerCase("es").includes(q)),
+      );
+  }
+  if (el.form?.id === "payment-form") updatePaymentPreview();
 });
+window.addEventListener("beforeunload", (e) => {
+  if (state.dirty) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+function formSignature() {
+  return JSON.stringify(
+    [...document.querySelectorAll("#main form")].map((f) => [
+      f.id,
+      [...new FormData(f)],
+    ]),
+  );
+}
+function configureInputs() {
+  document
+    .querySelectorAll('[name="birth_date"]')
+    .forEach((el) => (el.max = today()));
+  document.querySelectorAll('[name="g_phone"]').forEach((el) => {
+    el.pattern = "[+0-9 ()-]{8,25}";
+    el.title = "Entre 8 y 15 dígitos; admite +, espacios y guiones";
+    if (!el.parentElement.querySelector("small"))
+      el.insertAdjacentHTML(
+        "afterend",
+        "<small>8 a 15 dígitos; admite +, espacios y guiones.</small>",
+      );
+  });
+  document.querySelectorAll('[name="g_address"]').forEach((el) => {
+    if (!el.parentElement.querySelector("button"))
+      el.insertAdjacentHTML(
+        "afterend",
+        '<button type="button" class="btn quiet" data-action="copy-address">Usar dirección del estudiante</button>',
+      );
+  });
+  const f = document.querySelector("#enrollment-form");
+  if (f) {
+    const el = f.elements.enrollment_amount;
+    el.disabled = f.elements.status.value !== "Activa";
+    el.required = !el.disabled;
+    el.closest("label").hidden = el.disabled;
+    el.closest("label").querySelector("span").textContent =
+      "Monto de matrícula (C$) *";
+  }
+}
+function updatePaymentPreview() {
+  const f = document.querySelector("#payment-form");
+  if (!f) return;
+  const c = state.charges.find(
+    (c) => c.id === Number(f.elements.charge_id.value),
+  );
+  document.querySelector("#charge-review").innerHTML = c
+    ? chargeTable([c])
+    : "Seleccione una obligación.";
+  const amount = Math.round(Number(f.elements.amount.value) * 100);
+  f.elements.amount.max = c ? (c.balance_cents / 100).toFixed(2) : "";
+  document.querySelector("#remaining").textContent = c
+    ? `Saldo después del abono: ${money(c.balance_cents - amount)}`
+    : "";
+}
+async function refreshCashDraft() {
+  const form = document.querySelector("#payment-form");
+  const draft = form
+    ? {
+        charge: form.elements.charge_id.value,
+        amount: form.elements.amount.value,
+      }
+    : null;
+  state.dirty = false;
+  await refresh();
+  if (draft) {
+    const next = document.querySelector("#payment-form");
+    if (next) {
+      next.elements.charge_id.value = draft.charge;
+      next.elements.amount.value = draft.amount;
+      updatePaymentPreview();
+      state.dirty = formSignature() !== state.formBaseline;
+    }
+  }
+}
+async function paymentContext(id) {
+  const p = (await api("/payments")).find((p) => p.id === Number(id));
+  return `<p>${h(p.student_name)} · Comprobante #${p.id}</p><p>${h(p.concept)} ${p.month ? monthLabel(p.month) : ""} · ${p.school_year} · ${money(p.amount_cents)}</p>`;
+}
 function filterStudentTable() {
   const q =
       document
         .querySelector("#student-search")
         ?.value.toLocaleLowerCase("es") || "",
     g = document.querySelector("#student-grade")?.value;
+  state.search = q;
+  state.gradeFilter = g;
   document.querySelector("#student-table").innerHTML = studentTable(
     state.students.filter(
       (s) =>
         (!g || s.grade === Number(g)) &&
-        `${s.names} ${s.surnames} ${s.id}`.toLocaleLowerCase("es").includes(q),
+        `${s.names} ${s.surnames} ${s.id} EST-${String(s.id).padStart(4, "0")}`
+          .toLocaleLowerCase("es")
+          .includes(q),
     ),
   );
   icons();
@@ -1534,8 +1737,11 @@ async function filterPaymentTable() {
   const q = document.querySelector("#payment-search")?.value || "",
     month = document.querySelector("#payment-month")?.value || "",
     concept = document.querySelector("#payment-concept")?.value || "";
+  state.paymentSearch = q;
+  state.paymentMonth = month;
+  state.paymentConcept = concept;
   const rows = await api(
-    `/payments?q=${encodeURIComponent(q)}&month=${encodeURIComponent(month)}&concept=${encodeURIComponent(concept)}`,
+    `/payments?year=${state.year}&student_id=${state.selectedStudent || ""}&q=${encodeURIComponent(q)}&month=${encodeURIComponent(month)}&concept=${encodeURIComponent(concept)}`,
   );
   document.querySelector("#payment-table").innerHTML = paymentTable(rows);
   icons();
@@ -1545,6 +1751,24 @@ document.addEventListener("submit", async (event) => {
   if (!form.id) return;
   event.preventDefault();
   try {
+    const birth = form.querySelector('[name="birth_date"]');
+    if (birth && birth.value > today()) {
+      birth.setCustomValidity("La fecha de nacimiento no puede ser futura");
+      birth.reportValidity();
+      return;
+    }
+    for (const phone of form.querySelectorAll('[name="g_phone"]')) {
+      if (
+        !/^\+?[\d ()-]+$/.test(phone.value) ||
+        !/^[0-9]{8,15}$/.test(phone.value.replace(/\D/g, ""))
+      ) {
+        phone.setCustomValidity(
+          "Use entre 8 y 15 dígitos; admite +, espacios y guiones",
+        );
+        phone.reportValidity();
+        return;
+      }
+    }
     if (form.id === "login-form") {
       const data = getForm(form);
       state.user = await api("/login", { method: "POST", body: data });
@@ -1586,42 +1810,64 @@ document.addEventListener("submit", async (event) => {
       state.selectedStudent = result.id;
       state.showStudentForm = false;
       state.editingStudent = null;
-      notify("Estudiante guardado");
-      return refresh();
+      state.dirty = false;
+      state.dossier = true;
+      state.tab = "data";
+      state.year = student.school_year;
+      await go("students");
+      return notify(
+        "Estudiante guardado",
+        "Su expediente está abierto. Continúe en Matrícula cuando lo necesite.",
+      );
     }
     if (form.id === "enrollment-form") {
       const data = getForm(form);
       await api("/enrollments", { method: "POST", body: data });
-      notify("Solicitud guardada");
-      return refresh();
+      state.dirty = false;
+      state.selectedStudent = Number(data.student_id);
+      state.year = data.school_year;
+      state.tab = "documents";
+      await go("students");
+      return notify(
+        "Solicitud guardada",
+        "Puede consultar documentos o registrar un pago.",
+      );
     }
     if (form.id === "charge-form") {
       const data = getForm(form);
       await api("/charges", { method: "POST", body: data });
+      state.dirty = false;
       notify("Mensualidad creada");
       return refresh();
     }
     if (form.id === "payment-form") {
       const data = getForm(form);
-      await api("/payments", { method: "POST", body: data });
-      notify("Pago registrado");
-      return refresh();
-    }
-    if (form.id === "discount-form") {
-      const data = getForm(form);
-      if (
-        !(await confirmAction(
-          "Autorizar descuento",
-          `Se aplicará ${data.percent}% al cargo seleccionado.`,
-        ))
-      )
-        return;
-      await api("/discounts", { method: "POST", body: data });
-      notify("Descuento autorizado");
-      return refresh();
+      const saved = await api("/payments", { method: "POST", body: data });
+      state.dirty = false;
+      await refresh();
+      const r = await Swal.fire({
+        title: "Pago registrado",
+        text: "El saldo se actualizó. Puede imprimir el comprobante o registrar otro pago.",
+        showCancelButton: true,
+        confirmButtonText: "Ver / imprimir comprobante",
+        cancelButtonText: "Registrar otro pago",
+      });
+      if (r.isConfirmed)
+        return handleAction({
+          dataset: { action: "print-payment", id: saved.id },
+        });
+      return;
     }
   } catch (e) {
-    notify("Revise los datos", e.message, "error");
+    let error = form.querySelector(".form-error");
+    if (!error) {
+      error = document.createElement("p");
+      error.className = "form-error";
+      error.setAttribute("role", "alert");
+      form.append(error);
+    }
+    error.textContent = e.message;
+    error.scrollIntoView({ block: "nearest" });
   }
 });
 try {

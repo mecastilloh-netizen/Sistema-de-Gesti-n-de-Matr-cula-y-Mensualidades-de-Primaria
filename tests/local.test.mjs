@@ -149,3 +149,202 @@ test("versión local: matrícula, abonos, descuentos y roles", async () => {
     45026,
   );
 });
+
+test("fechas de calendario y marcas de tiempo sin duplicar zona", async () => {
+  const { fmtDate } = await import("../public/js/api.js");
+  assert.equal(fmtDate("2026-01-10"), "10/01/2026");
+  assert.equal(fmtDate("2026-01-10T12:00:00Z"), "10/01/2026");
+  assert.equal(fmtDate("2026-01-10 12:00:00"), "10/01/2026");
+  assert.equal(fmtDate("2026-01-10T01:00:00Z"), "09/01/2026");
+  assert.equal(fmtDate("2026-01-10T12:00:00-06:00"), "10/01/2026");
+});
+
+test("períodos, validaciones y datos persistentes de dos años", async () => {
+  await api("/login", {
+    method: "POST",
+    body: { username: "caja", password: "Caja12345!" },
+  });
+  const body = {
+    student: {
+      names: "Prueba",
+      surnames: "Períodos",
+      birth_date: "2018-03-02",
+      sex: "Femenino",
+      address: "Ficticia",
+      grade: 3,
+      school_year: 2025,
+    },
+    guardians: [
+      {
+        names: "Tutor",
+        surnames: "Prueba",
+        relationship: "Tutor/a",
+        phone: "+505 8888-8888",
+        address: "Ficticia",
+      },
+    ],
+  };
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: { ...body, student: { ...body.student, birth_date: "2099-01-01" } },
+    }),
+    /futura/,
+  );
+  await assert.rejects(
+    api("/students", {
+      method: "POST",
+      body: { ...body, guardians: [{ ...body.guardians[0], phone: "abc" }] },
+    }),
+    /Teléfono/,
+  );
+  const { id } = await api("/students", { method: "POST", body });
+  for (const year of [2025, 2026])
+    await api("/enrollments", {
+      method: "POST",
+      body: {
+        student_id: id,
+        grade: 3,
+        school_year: year,
+        date: `${year}-01-10`,
+        status: "Activa",
+        enrollment_amount: 100.29,
+      },
+    });
+  const c = (await api(`/charges?student_id=${id}`)).find(
+    (c) => c.school_year === 2025,
+  );
+  await api("/payments", {
+    method: "POST",
+    body: { charge_id: c.id, amount: 50.1 },
+  });
+  const account = await api(`/students/${id}/account?year=2025`);
+  assert.equal(account.totals.charged_cents, 10029);
+  assert.equal(account.totals.balance_cents, 5019);
+  assert.equal(account.payments.length, 1);
+  assert.equal(
+    (await api(`/students/${id}/account?year=2026`)).payments.length,
+    0,
+  );
+  assert.equal(
+    (await api(`/students/${id}/account`)).totals.charged_cents,
+    20058,
+  );
+  assert.equal((await api(`/payments?year=2025&student_id=${id}`)).length, 1);
+  const dash = await api("/dashboard?year=2025");
+  assert.equal(dash.stats.payments_cents, 5010);
+  assert.equal(dash.stats.enrollments, 1);
+  const docs = await api(`/students/${id}/documents`);
+  await assert.rejects(
+    api(`/documents/${docs[0].id}`, {
+      method: "PUT",
+      body: { status: "Entregado", delivered_at: "" },
+    }),
+    /Fecha/,
+  );
+  await api(`/documents/${docs[0].id}`, {
+    method: "PUT",
+    body: { status: "Pendiente", delivered_at: "" },
+  });
+  await assert.rejects(
+    api("/discounts", {
+      method: "POST",
+      body: {
+        charge_id: c.id,
+        percent: 10,
+        reason: "Prueba",
+        basis: "Saldo pendiente del cargo",
+      },
+    }),
+    /directora/,
+  );
+  assert.equal(
+    (await api(`/students/${id}`)).guardians[0].phone,
+    "+505 8888-8888",
+  );
+});
+
+test("prematrícula sin cargo y confirmación atómica", async () => {
+  const s = (await api("/students")).find((s) => s.names === "Prueba");
+  const before = localStorage.getItem("primaria_datos_v1");
+  await assert.rejects(
+    api("/enrollments", {
+      method: "POST",
+      body: {
+        student_id: s.id,
+        grade: 4,
+        school_year: 2027,
+        date: "2027-01-10",
+        status: "Activa",
+        enrollment_amount: "",
+      },
+    }),
+    /Monto/,
+  );
+  assert.equal(localStorage.getItem("primaria_datos_v1"), before);
+  const e = await api("/enrollments", {
+    method: "POST",
+    body: {
+      student_id: s.id,
+      grade: 4,
+      school_year: 2027,
+      date: "2027-01-10",
+      status: "Prematrícula",
+    },
+  });
+  assert.equal(
+    (await api(`/charges?student_id=${s.id}`)).filter(
+      (c) => c.school_year === 2027,
+    ).length,
+    0,
+  );
+  await api(`/enrollments/${e.id}/confirm`, {
+    method: "POST",
+    body: { enrollment_amount: 700.01 },
+  });
+  assert.equal(
+    (await api(`/students/${s.id}/account?year=2027`)).totals.charged_cents,
+    70001,
+  );
+  await assert.rejects(
+    api(`/enrollments/${e.id}/confirm`, {
+      method: "POST",
+      body: { enrollment_amount: 700.01 },
+    }),
+    /confirmada/,
+  );
+});
+
+test("recepción mensual usa fecha civil de Nicaragua y excluye anulados", async () => {
+  const { receiptPeriod } = await import("../public/js/api.js");
+  assert.deepEqual(receiptPeriod("2026-01-01T02:00:00Z"), {
+    year: 2025,
+    month: 12,
+  });
+  assert.deepEqual(receiptPeriod("2026-01-01T06:00:00Z"), {
+    year: 2026,
+    month: 1,
+  });
+  const db = JSON.parse(localStorage.getItem("primaria_datos_v1"));
+  const c = db.charges.find((c) => c.school_year === 2025);
+  db.payments.push({
+    id: 999,
+    charge_id: c.id,
+    amount_cents: 1234,
+    status: "Válido",
+    paid_at: "2026-01-01T02:00:00Z",
+    created_by: "caja",
+  });
+  db.payments.push({
+    id: 1000,
+    charge_id: c.id,
+    amount_cents: 9000,
+    status: "Anulado",
+    paid_at: "2025-12-10T12:00:00Z",
+    created_by: "caja",
+  });
+  localStorage.setItem("primaria_datos_v1", JSON.stringify(db));
+  const d = await api("/dashboard?year=2025");
+  assert.equal(d.monthly.find((m) => m.month === 12).amount_cents, 1234);
+  assert.equal(d.stats.payments_cents, 6244);
+});

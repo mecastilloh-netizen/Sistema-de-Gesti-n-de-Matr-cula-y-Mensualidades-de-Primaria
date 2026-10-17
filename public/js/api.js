@@ -81,6 +81,10 @@ const charge = (db, c) => {
     paid_cents,
     discount_cents,
     discount_reason: d?.reason || null,
+    discount_percent: d?.percent || null,
+    discount_basis: d?.basis || null,
+    discount_author: d?.authorized_by || null,
+    discount_date: d?.authorized_at || null,
     balance_cents: Math.max(0, c.amount_cents - paid_cents - discount_cents),
   };
 };
@@ -123,6 +127,11 @@ function guardian(g) {
   };
   if (x.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email))
     fail("Correo no válido");
+  if (
+    !/^\+?[\d ()-]+$/.test(x.phone) ||
+    !/^[0-9]{8,15}$/.test(x.phone.replace(/\D/g, ""))
+  )
+    fail("Teléfono: use entre 8 y 15 dígitos; admite +, espacios y guiones");
   return x;
 }
 function studentData(body) {
@@ -145,6 +154,7 @@ function studentData(body) {
     !["Activo", "Inactivo"].includes(x.status)
   )
     fail("Sexo o estado no válido");
+  if (x.birth_date > today()) fail("Fecha de nacimiento no puede ser futura");
   return x;
 }
 function enrollmentCharge(db, e, amount_cents) {
@@ -216,26 +226,37 @@ export async function api(path, options = {}) {
     };
   let m;
   if (route === "/dashboard" && method === "GET") {
-    const year = Number(url.searchParams.get("year")) || yearNow(),
-      valid = db.payments.filter((p) => p.status === "Válido");
+    const year = Number(url.searchParams.get("year")) || yearNow();
+    const cohort = db.students.filter(
+      (s) =>
+        s.school_year === year ||
+        db.enrollments.some(
+          (e) => e.student_id === s.id && e.school_year === year,
+        ),
+    );
+    const valid = payments(db).filter(
+      (p) => p.status === "Válido" && p.school_year === year,
+    );
     return {
       stats: {
-        students: db.students.length,
+        students: cohort.length,
         enrollments: db.enrollments.filter(
           (e) => e.status === "Activa" && e.school_year === year,
         ).length,
-        payments_cents: valid
-          .filter((p) => p.paid_at.slice(0, 7) === now().slice(0, 7))
-          .reduce((a, p) => a + p.amount_cents, 0),
-        documents: db.documents.filter((d) => d.status === "Pendiente").length,
+        payments_cents: valid.reduce((a, p) => a + p.amount_cents, 0),
+        documents: db.documents.filter(
+          (d) =>
+            d.status === "Pendiente" &&
+            cohort.some((s) => s.id === d.student_id),
+        ).length,
       },
       monthly: Array.from({ length: 12 }, (_, i) => ({
         month: i + 1,
         amount_cents: valid
           .filter(
             (p) =>
-              new Date(p.paid_at).getFullYear() === year &&
-              new Date(p.paid_at).getMonth() === i,
+              receiptPeriod(p.paid_at).year === year &&
+              receiptPeriod(p.paid_at).month === i + 1,
           )
           .reduce((a, p) => a + p.amount_cents, 0),
       })),
@@ -444,6 +465,10 @@ export async function api(path, options = {}) {
     if (concept) rows = rows.filter((p) => p.concept === concept);
     if (student_id)
       rows = rows.filter((p) => p.student_id === Number(student_id));
+    if (url.searchParams.get("year"))
+      rows = rows.filter(
+        (p) => p.school_year === Number(url.searchParams.get("year")),
+      );
     return rows;
   }
   if (route === "/payments" && method === "POST") {
@@ -544,7 +569,11 @@ export async function api(path, options = {}) {
   m = route.match(/^\/students\/(\d+)\/account$/);
   if (m && method === "GET") {
     const s = student(db, m[1]),
-      rows = charges(db, s.id),
+      rows = charges(db, s.id).filter(
+        (c) =>
+          !url.searchParams.get("year") ||
+          c.school_year === Number(url.searchParams.get("year")),
+      ),
       totals = rows.reduce(
         (a, c) => ({
           charged_cents: a.charged_cents + c.amount_cents,
@@ -562,7 +591,12 @@ export async function api(path, options = {}) {
     return {
       student: s,
       charges: rows,
-      payments: payments(db).filter((p) => p.student_id === s.id),
+      payments: payments(db).filter(
+        (p) =>
+          p.student_id === s.id &&
+          (!url.searchParams.get("year") ||
+            p.school_year === Number(url.searchParams.get("year"))),
+      ),
       totals,
     };
   }
@@ -630,4 +664,36 @@ export async function confirmAction(
       })
     ).isConfirmed;
   return confirm(`${title}\n${text}`);
+}
+
+// Calendar dates retain their day; timestamps use Nicaragua civil time.
+export function fmtDate(value) {
+  if (!value) return "—";
+  const calendar = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const normalized = calendar ? `${value}T12:00:00Z` : value.replace(" ", "T");
+  const d = new Date(
+    calendar || /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized)
+      ? normalized
+      : normalized + "Z",
+  );
+  return Number.isNaN(d.valueOf())
+    ? "Fecha no válida"
+    : new Intl.DateTimeFormat("es-NI", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: calendar ? "UTC" : "America/Managua",
+      }).format(d);
+}
+
+export function receiptPeriod(timestamp) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "numeric",
+    timeZone: "America/Managua",
+  }).formatToParts(new Date(timestamp));
+  return {
+    year: Number(parts.find((p) => p.type === "year").value),
+    month: Number(parts.find((p) => p.type === "month").value),
+  };
 }
