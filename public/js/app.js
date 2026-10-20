@@ -2071,7 +2071,7 @@ function showFieldError(input, message, { focus = true } = {}) {
 function errorField(form, error) {
   if (!error?.field) return null;
   if (error.guardianIndex != null) {
-    const block = [...form.querySelectorAll(".guardian-block")][error.guardianIndex];
+    const block = form.querySelector(`.guardian-block[data-guardian="${error.guardianIndex}"]`);
     return block?.querySelector(`[name="${error.field}"]`) || null;
   }
   return form.elements.namedItem(error.field) || null;
