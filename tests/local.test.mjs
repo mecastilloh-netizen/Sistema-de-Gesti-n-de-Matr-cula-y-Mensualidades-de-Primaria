@@ -12,7 +12,8 @@ const memory = () => {
 };
 globalThis.localStorage = memory();
 globalThis.sessionStorage = memory();
-const { api } = await import("../public/js/api.js");
+const { api, initializeDemoData, resetDemoData } = await import("../public/js/api.js");
+const { createDemoData, DEMO_VERSION } = await import("../public/js/demo-data.js");
 const { chartBarPercent, findCashStudents } = await import("../public/js/ui-utils.js");
 
 test("los textos de la interfaz están guardados en UTF-8 correcto", () => {
@@ -443,4 +444,157 @@ test("las validaciones de campos identifican el control y responsable incorrecto
     }),
     (error) => error.field === "g_phone" && error.guardianIndex === 2,
   );
+});
+
+test("los datos ficticios 2025–2026 conservan integridad y saldos coherentes", () => {
+  const db = createDemoData();
+  assert.equal(db.demo_data_version, DEMO_VERSION);
+  assert.deepEqual(createDemoData(), db, "el escenario debe ser determinista");
+  assert.equal(db.students.length, 30);
+  for (let grade = 1; grade <= 6; grade += 1)
+    assert.equal(db.students.filter((s) => s.grade === grade).length, 5);
+  assert.equal(db.students.filter((s) => s.school_year === 2026).length, 30);
+
+  const ids = (rows) => rows.map((row) => row.id);
+  for (const collection of ["students", "guardians", "enrollments", "documents", "charges", "discounts", "payments", "activity"]) {
+    assert.equal(new Set(ids(db[collection])).size, db[collection].length, `${collection}: IDs únicos`);
+  }
+  const students = new Map(db.students.map((s) => [s.id, s]));
+  const enrollments = new Map(db.enrollments.map((e) => [e.id, e]));
+  const charges = new Map(db.charges.map((c) => [c.id, c]));
+  const paymentsByCharge = new Map();
+  for (const payment of db.payments) {
+    assert.ok(charges.has(payment.charge_id), `pago ${payment.id} referencia un cargo`);
+    assert.ok(Number.isInteger(payment.amount_cents) && payment.amount_cents > 0);
+    assert.ok(["Válido", "Anulado"].includes(payment.status));
+    if (payment.status === "Anulado") {
+      assert.ok(payment.void_reason && payment.voided_at && payment.voided_by);
+    } else {
+      assert.equal(payment.void_reason, null);
+      assert.equal(payment.voided_at, null);
+      assert.equal(payment.voided_by, null);
+    }
+    const list = paymentsByCharge.get(payment.charge_id) || [];
+    list.push(payment);
+    paymentsByCharge.set(payment.charge_id, list);
+  }
+  assert.ok(db.guardians.length >= 30);
+  assert.ok(db.guardians.every((g) => students.has(g.student_id)));
+  assert.ok(db.students.every((s) => db.guardians.some((g) => g.student_id === s.id)));
+  assert.ok(db.enrollments.every((e) => students.has(e.student_id)));
+  assert.ok(db.documents.every((d) => students.has(d.student_id)));
+  assert.ok(db.documents.some((d) => d.status === "Entregado"));
+  assert.ok(db.documents.some((d) => d.status === "Pendiente"));
+  assert.ok(db.documents.some((d) => d.status === "No requerido"));
+  assert.ok(db.enrollments.some((e) => e.school_year === 2025));
+  assert.ok(db.enrollments.some((e) => e.school_year === 2026 && e.status === "Prematrícula"));
+  assert.ok(db.enrollments.some((e) => e.school_year === 2026 && e.status === "Activa"));
+  for (const key of new Set(db.enrollments.filter((e) => e.status === "Activa").map((e) => `${e.student_id}:${e.school_year}`))) {
+    const [studentId, schoolYear] = key.split(":").map(Number);
+    assert.equal(db.enrollments.filter((e) => e.student_id === studentId && e.school_year === schoolYear && e.status === "Activa").length, 1);
+  }
+  assert.ok(db.charges.length >= 100);
+  for (const charge of db.charges) {
+    assert.ok(students.has(charge.student_id));
+    assert.ok(Number.isInteger(charge.amount_cents) && charge.amount_cents > 0);
+    if (charge.concept === "Matrícula") {
+      const enrollment = enrollments.get(charge.enrollment_id);
+      assert.ok(enrollment);
+      assert.equal(enrollment.student_id, charge.student_id);
+      assert.equal(enrollment.school_year, charge.school_year);
+      assert.equal(enrollment.status, "Activa");
+    } else {
+      assert.equal(charge.concept, "Mensualidad");
+      assert.ok(charge.month >= 1 && charge.month <= 12);
+      assert.ok(db.enrollments.some((e) => e.student_id === charge.student_id && e.school_year === charge.school_year && e.status === "Activa"));
+    }
+    const discount = db.discounts.find((d) => d.charge_id === charge.id);
+    const paid = (paymentsByCharge.get(charge.id) || []).filter((p) => p.status === "Válido").reduce((sum, p) => sum + p.amount_cents, 0);
+    const discountCents = discount?.discount_cents || 0;
+    assert.ok(paid + discountCents <= charge.amount_cents, `cargo ${charge.id} no debe quedar sobrepagado`);
+    assert.ok(charge.amount_cents - paid - discountCents >= 0);
+  }
+  for (const discount of db.discounts) {
+    const original = charges.get(discount.charge_id);
+    assert.ok(original);
+    assert.ok(Number.isInteger(discount.discount_cents));
+    assert.equal(discount.original_cents, original.amount_cents);
+    assert.equal(discount.discount_cents, Math.round(original.amount_cents * discount.percent / 100));
+    assert.equal(discount.final_cents, original.amount_cents - discount.discount_cents);
+    assert.ok(discount.authorized_by && discount.authorized_at && discount.reason);
+  }
+  assert.ok(db.discounts.length > 0);
+  assert.ok(db.payments.some((p) => p.status === "Anulado"));
+  assert.ok(db.payments.some((p) => p.status === "Válido"));
+  assert.ok(db.activity.length >= 50);
+  assert.deepEqual(db.payments.map((p) => p.paid_at), db.payments.map((p) => p.paid_at).slice().sort(), "el historial del fixture queda cronológico");
+  assert.deepEqual(db.activity.map((a) => a.created_at), db.activity.map((a) => a.created_at).slice().sort(), "la actividad del fixture queda cronológica");
+  assert.ok(db.charges.some((c) => {
+    const paid = (paymentsByCharge.get(c.id) || []).filter((p) => p.status === "Válido").reduce((sum, p) => sum + p.amount_cents, 0);
+    return paid > 0 && paid + (db.discounts.find((d) => d.charge_id === c.id)?.discount_cents || 0) === c.amount_cents;
+  }), "incluye una obligación pagada por completo");
+  assert.ok(db.charges.some((c) => {
+    const paid = (paymentsByCharge.get(c.id) || []).filter((p) => p.status === "Válido").reduce((sum, p) => sum + p.amount_cents, 0);
+    return paid > 0 && c.amount_cents - paid - (db.discounts.find((d) => d.charge_id === c.id)?.discount_cents || 0) > 0;
+  }), "incluye abonos parciales con saldo");
+  assert.ok(db.charges.some((c) => c.amount_cents > 0 && !(paymentsByCharge.get(c.id) || []).some((p) => p.status === "Válido")));
+});
+
+test("la inicialización y el restablecimiento no sustituyen ni borran datos ajenos", () => {
+  const freshStore = memory();
+  freshStore.setItem("otra_aplicacion", "conservar");
+  assert.deepEqual(initializeDemoData(freshStore), { initialized: true, version: DEMO_VERSION });
+  const initialValue = freshStore.getItem("primaria_datos_v1");
+  assert.deepEqual(initializeDemoData(freshStore), { initialized: false, version: DEMO_VERSION });
+  assert.equal(freshStore.getItem("primaria_datos_v1"), initialValue, "una recarga no duplica ni modifica el escenario");
+  assert.equal(JSON.parse(initialValue).students.length, 30);
+
+  const validEmptyStore = memory();
+  validEmptyStore.setItem("primaria_datos_v1", "{}");
+  assert.deepEqual(initializeDemoData(validEmptyStore), { initialized: false, version: null });
+  assert.equal(validEmptyStore.getItem("primaria_datos_v1"), "{}", "una base válida vacía no se interpreta como instalación nueva");
+
+  const existingStore = memory();
+  const prior = JSON.stringify({ students: [{ id: 77, names: "Dato existente" }] });
+  existingStore.setItem("primaria_datos_v1", prior);
+  assert.equal(initializeDemoData(existingStore).initialized, false);
+  assert.equal(existingStore.getItem("primaria_datos_v1"), prior);
+
+  const brokenStore = memory();
+  brokenStore.setItem("primaria_datos_v1", "{base corrupta");
+  brokenStore.setItem("otra_aplicacion", "conservar");
+  assert.throws(() => initializeDemoData(brokenStore), (error) => error.code === "DEMO_STORAGE_CORRUPT");
+  assert.equal(brokenStore.getItem("primaria_datos_v1"), "{base corrupta", "no se repara silenciosamente");
+  assert.deepEqual(resetDemoData(brokenStore), { version: DEMO_VERSION });
+  assert.equal(JSON.parse(brokenStore.getItem("primaria_datos_v1")).students.length, 30);
+  assert.equal(brokenStore.getItem("otra_aplicacion"), "conservar");
+});
+
+test("la demostración alimenta consultas por año, saldos y pagos anulados", async () => {
+  globalThis.localStorage = memory();
+  globalThis.sessionStorage = memory();
+  initializeDemoData();
+  await api("/login", { method: "POST", body: { username: "caja", password: "Caja12345!" } });
+  const students = await api("/students");
+  assert.equal(students.length, 30);
+  assert.equal((await api("/dashboard?year=2026")).stats.students, 30);
+  assert.equal((await api("/dashboard?year=2026")).stats.enrollments, 24);
+  const recentActivity = (await api("/dashboard?year=2026")).activity.map((a) => a.created_at);
+  assert.deepEqual(recentActivity, recentActivity.slice().sort().reverse(), "Inicio muestra primero las actividades más recientes por fecha");
+  assert.equal((await api("/dashboard?year=2025")).stats.students, 10);
+  const full = await api("/students/1/account?year=2026");
+  assert.equal(full.totals.balance_cents, 0);
+  const partial = await api("/students/2/account?year=2026");
+  assert.ok(partial.totals.paid_cents > 0 && partial.totals.balance_cents > 0);
+  const annulled = await api("/students/3/account?year=2026");
+  assert.ok(annulled.payments.some((p) => p.status === "Anulado"));
+  assert.ok(annulled.totals.balance_cents > 0, "la anulación no reduce el saldo");
+  const annual = await api("/reports?year=2026");
+  assert.equal(annual.stats.students, 30);
+  assert.equal(annual.stats.enrollments, 24);
+  assert.equal(annual.payments.filter((p) => p.status === "Válido").reduce((sum, p) => sum + p.amount_cents, 0), annual.stats.payments_cents);
+  assert.equal(annual.enrollments.filter((e) => e.status === "Activa").length, 24);
+  const historical = await api("/reports?year=2025");
+  assert.equal(historical.stats.students, 10);
+  assert.ok(historical.payments.some((p) => p.status === "Válido"));
 });

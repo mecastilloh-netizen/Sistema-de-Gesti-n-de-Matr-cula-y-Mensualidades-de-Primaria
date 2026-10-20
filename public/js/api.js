@@ -1,6 +1,9 @@
+import { createDemoData, DEMO_VERSION } from "./demo-data.js";
+
 // Almacenamiento de demostración: los datos y los roles se controlan en este navegador.
 const KEY = "primaria_datos_v1",
   SESSION = "primaria_sesion_v1";
+const COLLECTIONS = ["students", "guardians", "enrollments", "documents", "charges", "discounts", "payments", "activity"];
 const fresh = () => ({
   students: [],
   guardians: [],
@@ -11,14 +14,77 @@ const fresh = () => ({
   payments: [],
   activity: [],
 });
-const read = () => {
+function storageError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+function parseDatabase(raw) {
+  let parsed;
   try {
-    return { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+    parsed = JSON.parse(raw);
   } catch {
-    return fresh();
+    throw storageError(
+      "Los datos locales del prototipo están dañados. No se reemplazaron automáticamente; puede recuperar los datos ficticios desde la acción Restablecer demostración.",
+      "DEMO_STORAGE_CORRUPT",
+    );
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    throw storageError(
+      "La estructura de datos locales no es válida. No se reemplazó; puede recuperar los datos ficticios desde la acción Restablecer demostración.",
+      "DEMO_STORAGE_CORRUPT",
+    );
+  for (const key of COLLECTIONS)
+    if (parsed[key] !== undefined && !Array.isArray(parsed[key]))
+      throw storageError(
+        `La colección local «${key}» no es válida. No se reemplazó; puede recuperar los datos ficticios desde la acción Restablecer demostración.`,
+        "DEMO_STORAGE_CORRUPT",
+      );
+  return { ...fresh(), ...parsed };
+}
+const read = () => {
+  let raw;
+  try {
+    raw = localStorage.getItem(KEY);
+  } catch {
+    throw storageError(
+      "El navegador no permitió leer el almacenamiento local. No se modificaron datos.",
+      "DEMO_STORAGE_UNAVAILABLE",
+    );
+  }
+  return raw === null ? fresh() : parseDatabase(raw);
 };
 const save = (db) => localStorage.setItem(KEY, JSON.stringify(db));
+export function initializeDemoData(storage = localStorage) {
+  let raw;
+  try {
+    raw = storage.getItem(KEY);
+    if (raw !== null) {
+      const db = parseDatabase(raw);
+      return { initialized: false, version: db.demo_data_version || null };
+    }
+    const db = createDemoData();
+    storage.setItem(KEY, JSON.stringify(db));
+    return { initialized: true, version: DEMO_VERSION };
+  } catch (error) {
+    if (error.code) throw error;
+    throw storageError(
+      "No se pudieron inicializar los datos locales. No se modificaron datos existentes.",
+      "DEMO_STORAGE_UNAVAILABLE",
+    );
+  }
+}
+export function resetDemoData(storage = localStorage) {
+  try {
+    storage.setItem(KEY, JSON.stringify(createDemoData()));
+    return { version: DEMO_VERSION };
+  } catch {
+    throw storageError(
+      "No se pudo restaurar la demostración. El navegador no permitió guardar los datos.",
+      "DEMO_STORAGE_UNAVAILABLE",
+    );
+  }
+}
 const id = (rows) => Math.max(0, ...rows.map((x) => x.id)) + 1;
 const fail = (m, field = null, guardianIndex = null) => {
   const error = Error(m);
@@ -185,6 +251,43 @@ function enrollmentCharge(db, e, amount_cents) {
     school_year: e.school_year,
   });
 }
+function dashboardData(db, year) {
+  const cohort = db.students.filter(
+    (s) =>
+      s.school_year === year ||
+      db.enrollments.some(
+        (e) => e.student_id === s.id && e.school_year === year,
+      ),
+  );
+  const valid = payments(db).filter(
+    (p) => p.status === "Válido" && p.school_year === year,
+  );
+  return {
+    stats: {
+      students: cohort.length,
+      enrollments: db.enrollments.filter(
+        (e) => e.status === "Activa" && e.school_year === year,
+      ).length,
+      payments_cents: valid.reduce((a, p) => a + p.amount_cents, 0),
+      documents: db.documents.filter(
+        (d) =>
+          d.status === "Pendiente" &&
+          cohort.some((s) => s.id === d.student_id),
+      ).length,
+    },
+    monthly: Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      amount_cents: valid
+        .filter(
+          (p) =>
+            receiptPeriod(p.paid_at).year === year &&
+            receiptPeriod(p.paid_at).month === i + 1,
+        )
+        .reduce((a, p) => a + p.amount_cents, 0),
+    })),
+    activity: db.activity.slice(-6).reverse(),
+  };
+}
 
 export async function api(path, options = {}) {
   const method = options.method || "GET",
@@ -230,40 +333,17 @@ export async function api(path, options = {}) {
   let m;
   if (route === "/dashboard" && method === "GET") {
     const year = Number(url.searchParams.get("year")) || yearNow();
-    const cohort = db.students.filter(
-      (s) =>
-        s.school_year === year ||
-        db.enrollments.some(
-          (e) => e.student_id === s.id && e.school_year === year,
-        ),
-    );
-    const valid = payments(db).filter(
-      (p) => p.status === "Válido" && p.school_year === year,
-    );
+    return dashboardData(db, year);
+  }
+  if (route === "/reports" && method === "GET") {
+    const year = Number(url.searchParams.get("year")) || yearNow();
     return {
-      stats: {
-        students: cohort.length,
-        enrollments: db.enrollments.filter(
-          (e) => e.status === "Activa" && e.school_year === year,
-        ).length,
-        payments_cents: valid.reduce((a, p) => a + p.amount_cents, 0),
-        documents: db.documents.filter(
-          (d) =>
-            d.status === "Pendiente" &&
-            cohort.some((s) => s.id === d.student_id),
-        ).length,
-      },
-      monthly: Array.from({ length: 12 }, (_, i) => ({
-        month: i + 1,
-        amount_cents: valid
-          .filter(
-            (p) =>
-              receiptPeriod(p.paid_at).year === year &&
-              receiptPeriod(p.paid_at).month === i + 1,
-          )
-          .reduce((a, p) => a + p.amount_cents, 0),
-      })),
-      activity: db.activity.slice(-6).reverse(),
+      ...dashboardData(db, year),
+      year,
+      payments: payments(db).filter((p) => p.school_year === year),
+      enrollments: db.enrollments
+        .filter((e) => e.school_year === year)
+        .map((e) => ({ ...e, student_name: name(db, e.student_id) })),
     };
   }
   if (route === "/students" && method === "GET")
@@ -639,13 +719,39 @@ export const icon = (name, size = 20) =>
   `<i data-lucide="${name}" style="width:${size}px;height:${size}px"></i>`;
 export const option = (value, label, selected) =>
   `<option value="${escape(value)}" ${String(value) === String(selected) ? "selected" : ""}>${escape(label)}</option>`;
+const dialogClasses = {
+  popup: "app-swal-popup",
+  title: "app-swal-title",
+  htmlContainer: "app-swal-html",
+  actions: "app-swal-actions",
+  confirmButton: "app-swal-confirm",
+  cancelButton: "app-swal-cancel",
+  input: "app-swal-input",
+  validationMessage: "app-swal-validation",
+};
+export function showDialog(options = {}) {
+  const opener = document.activeElement;
+  const suppliedClose = options.didClose;
+  return Swal.fire({
+    ...options,
+    buttonsStyling: false,
+    customClass: { ...dialogClasses, ...options.customClass },
+    didClose: (...args) => {
+      suppliedClose?.(...args);
+      requestAnimationFrame(() => {
+        if (opener instanceof HTMLElement && opener.isConnected)
+          opener.focus({ preventScroll: true });
+      });
+    },
+  });
+}
 export function notify(title, text = "", kind = "success") {
   if (window.Swal)
-    return Swal.fire({
+    return showDialog({
       icon: kind,
       title,
       text,
-      confirmButtonColor: "#1069e8",
+      confirmButtonText: "Aceptar",
     });
   alert(`${title}${text ? `\n${text}` : ""}`);
 }
@@ -656,14 +762,15 @@ export async function confirmAction(
 ) {
   if (window.Swal)
     return (
-      await Swal.fire({
+      await showDialog({
         title,
         text,
         icon: "question",
         showCancelButton: true,
+        focusCancel: true,
+        customClass: { popup: "app-swal-popup app-swal-popup--confirm" },
         confirmButtonText,
         cancelButtonText: "Cancelar",
-        confirmButtonColor: "#1069e8",
       })
     ).isConfirmed;
   return confirm(`${title}\n${text}`);

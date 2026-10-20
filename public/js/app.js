@@ -1,5 +1,7 @@
 import {
   api,
+  initializeDemoData,
+  resetDemoData,
   fmtDate,
   money,
   escape as h,
@@ -11,6 +13,7 @@ import {
   option,
   notify,
   confirmAction,
+  showDialog,
 } from "./api.js";
 import { chartBarPercent, findCashStudents } from "./ui-utils.js";
 
@@ -36,6 +39,7 @@ Object.assign(state, {
   tab: "data",
   cashTab: "pay",
   dirty: false,
+  reportSnapshot: null,
 });
 const yearSelect = (all = false) =>
   select(
@@ -95,6 +99,7 @@ const statusBadge = (text) =>
     class="badge rounded-pill status-badge ${text === "Pagado" ||
     text === "Entregado" ||
     text === "Activa" ||
+    text === "Activo" ||
     text === "Válido"
       ? "text-bg-success"
       : text === "Anulado"
@@ -114,9 +119,11 @@ const pageTitle = (title, sub, crumb = title) =>
       <h1>${title}</h1>
       <p>${sub}</p>
     </div>
-    <div class="breadcrumb">
-      ${icon("house", 18)} Inicio <span>›</span> ${crumb}
-    </div>
+    <nav class="breadcrumb" aria-label="Ruta de navegación">
+      ${icon("house", 18)} <span class="breadcrumb-home">Inicio</span>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current">${crumb}</span>
+    </nav>
   </div>`;
 const card = (title, iconName, content, right = "") =>
   /* HTML */ `<section class="card app-card shadow-sm mb-3">
@@ -202,7 +209,7 @@ function renderShell(content) {
   document.querySelector("#main")?.setAttribute("tabindex", "-1");
   document.querySelector("#main")?.focus({ preventScroll: true });
 }
-function login() {
+function login(storageMessage = null) {
   app.innerHTML = /* HTML */ `<header class="topbar login-header">
       <div class="brand">
         <div class="brand-mark">🏫</div>
@@ -234,35 +241,23 @@ function login() {
             Acceda al sistema para gestionar matrículas,<br />mensualidades y
             más.
           </p>
-          <form id="login-form">
-            <label class="input-icon"
-              >${icon("user-round", 20)}<input class="form-control"
-                name="username"
-                placeholder="Usuario"
-                required
-                autocomplete="username" /></label
-            ><label class="input-icon"
-              >${icon("lock-keyhole", 20)}<input class="form-control"
-                name="password"
-                placeholder="Contraseña"
-                type="password"
-                required
-                autocomplete="current-password"
-              /><button
-                type="button"
-                data-action="toggle-password"
-                title="Mostrar contraseña"
-              >
-                ${icon("eye-off", 19)}
-              </button></label
-            ><button class="btn btn-primary app-action w-100" type="submit">
-              Iniciar sesión ${icon("arrow-right", 19)}
-            </button>
-          </form>
-          <div class="demo-credentials">
-            Directora: <strong>directora / Directora123!</strong><br />Caja:
-            <strong>caja / Caja12345!</strong>
-          </div>
+          ${storageMessage
+            ? `<div class="alert alert-danger" role="alert">${h(storageMessage)}</div>
+              <button type="button" class="btn btn-outline-danger app-action" data-action="reset-demo">Restablecer datos ficticios de demostración</button>`
+            : `<form id="login-form">
+                <div class="login-field"><label for="login-username">Usuario</label>
+                  <span class="input-icon">${icon("user-round", 20)}<input id="login-username" class="form-control" name="username" required autocomplete="username" /></span>
+                </div>
+                <div class="login-field"><label for="login-password">Contraseña</label>
+                  <span class="input-icon">${icon("lock-keyhole", 20)}<input id="login-password" class="form-control" name="password" type="password" required autocomplete="current-password" /><button type="button" data-action="toggle-password" aria-label="Mostrar contraseña" title="Mostrar contraseña">${icon("eye-off", 19)}</button></span>
+                </div>
+                <button class="btn btn-primary app-action w-100" type="submit">Iniciar sesión ${icon("arrow-right", 19)}</button>
+              </form>
+              <div class="demo-credentials">
+                Directora: <strong>directora / Directora123!</strong><br />Caja:
+                <strong>caja / Caja12345!</strong>
+              </div>
+              <button type="button" class="btn btn-link demo-reset-link" data-action="reset-demo">Restaurar datos ficticios de demostración</button>`}
           <div class="secure">
             ${icon("shield-check", 19)} Demostración local · datos guardados en
             este navegador
@@ -302,6 +297,7 @@ async function go(page) {
   )
     return;
   state.dirty = false;
+  state.reportSnapshot = null;
   state.page = page;
   state.loading = true;
   renderShell(
@@ -360,6 +356,7 @@ async function dashboard() {
         "outline",
       )}<button class="btn btn-primary app-action" data-page="payments">Registrar pago</button
       ><button class="btn btn-outline-primary app-action" data-page="reports">Reportes</button>
+      ${actionButton("reset-demo", "Restaurar demo", "rotate-ccw", "quiet", 'aria-label="Restaurar los datos ficticios de demostración"')}
     </div>
     <div class="stats row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3">
       ${stats
@@ -590,7 +587,7 @@ async function students() {
         <div id="student-table">${studentTable(state.students)}</div>`,
     )}`;
 }
-function studentTable(rows) {
+function studentTable(rows, filtered = false) {
   return rows.length
     ? /* HTML */ `<div class="table-responsive table-wrap student-list">
         <table class="table table-hover align-middle mb-0">
@@ -637,8 +634,10 @@ function studentTable(rows) {
         </table>
       </div>`
     : empty(
-        "No hay estudiantes",
-        "Registre el primer estudiante para comenzar.",
+        filtered ? "No se encontraron estudiantes" : "No hay estudiantes",
+        filtered
+          ? "Pruebe otro nombre, código o grado."
+          : "Registre el primer estudiante para comenzar.",
       );
 }
 async function enrollments(embedded = false) {
@@ -940,16 +939,16 @@ function chargeTable(charges) {
                   >
                 </td>
                 <td data-label="Año">${c.school_year}</td>
-                <td data-label="Monto">${money(c.amount_cents)}</td>
-                <td data-label="Descuento">
+                <td data-label="Monto" class="print-amount">${money(c.amount_cents)}</td>
+                <td data-label="Descuento" class="print-amount">
                   ${money(c.discount_cents)}<small
                     >${h(c.discount_reason || "")}${c.discount_percent
                       ? `<br>${c.discount_percent}% · ${h(c.discount_basis)}<br>${h(c.discount_author)} · ${fmtDate(c.discount_date)}`
                       : ""}</small
                   >
                 </td>
-                <td data-label="Pagado">${money(c.paid_cents)}</td>
-                <td data-label="Saldo">
+                <td data-label="Pagado" class="print-amount">${money(c.paid_cents)}</td>
+                <td data-label="Saldo" class="print-amount">
                   <strong class="${c.balance_cents ? "red-text" : "green-text"}"
                     >${money(c.balance_cents)}</strong
                   >
@@ -991,7 +990,7 @@ function paymentTable(rows) {
                       >
                     </td>
                     <td data-label="Fecha de recepción">${fmtDate(p.paid_at)}</td>
-                    <td data-label="Monto">${money(p.amount_cents)}</td>
+                    <td data-label="Monto" class="print-amount">${money(p.amount_cents)}</td>
                     <td data-label="Estado">${statusBadge(p.status)}</td>
                     <td data-label="Acciones" class="row-actions">
                       ${actionButton(
@@ -1090,13 +1089,41 @@ async function account(embedded = false) {
         )}`;
 }
 async function reportBody() {
-  const [d, p, e] = await Promise.all([
-    api(`/dashboard?year=${state.year}`),
-    api(`/payments?year=${state.year}`),
-    api("/enrollments"),
-  ]);
-  const valid = p.filter((x) => x.status === "Válido");
-  return `<p>Año lectivo: ${state.year}. Los pagos se agrupan por año de la obligación, aunque se reciban en otra fecha. Documentos: estado actual de estudiantes vinculados al período.</p><div class="account-stats"><div>Estudiantes <strong>${d.stats.students}</strong></div><div>Matrículas activas <strong>${d.stats.enrollments}</strong></div><div>Pagos válidos <strong>${valid.length}</strong></div><div>Documentos pendientes <strong>${d.stats.documents}</strong></div></div><h2>Matrículas por grado</h2>${grades.map(([n, l]) => `<p>${l}: ${e.filter((x) => x.grade === n && x.status === "Activa" && x.school_year === Number(state.year)).length}</p>`).join("")}<h2>Pagos por concepto · C$</h2>${["Matrícula", "Mensualidad"].map((c) => `<p>${c}: ${money(valid.filter((p) => p.concept === c).reduce((a, p) => a + p.amount_cents, 0))}</p>`).join("")}<p>Total recibido para el año lectivo: ${money(valid.reduce((a, p) => a + p.amount_cents, 0))}</p>`;
+  const year = Number(state.year) || yearNow();
+  if (!state.reportSnapshot || state.reportSnapshot.year !== year)
+    state.reportSnapshot = await api(`/reports?year=${year}`);
+  const snapshot = state.reportSnapshot;
+  const valid = snapshot.payments.filter((p) => p.status === "Válido");
+  const totalReceived = valid.reduce((sum, p) => sum + p.amount_cents, 0);
+  const gradeRows = grades
+    .map(([number, label]) => {
+      const count = snapshot.enrollments.filter(
+        (e) => e.grade === number && e.status === "Activa",
+      ).length;
+      return `<tr><th scope="row">${label}</th><td data-label="Matrículas activas" data-report-value="grade-${number}">${count}</td></tr>`;
+    })
+    .join("");
+  const conceptRows = ["Matrícula", "Mensualidad"]
+    .map((concept) => {
+      const rows = valid.filter((p) => p.concept === concept);
+      const amount = rows.reduce((sum, p) => sum + p.amount_cents, 0);
+      const key = concept === "Matrícula" ? "matricula" : "mensualidad";
+      return `<tr><th scope="row">${concept}</th><td data-label="Pagos válidos" data-report-value="count-${key}">${rows.length}</td><td class="text-end" data-label="Total recibido" data-report-value="total-${key}">${money(amount)}</td></tr>`;
+    })
+    .join("");
+  return `<section class="report-content" data-report-year="${year}">
+    <p class="report-context">Año lectivo <strong>${year}</strong>. Los pagos se agrupan por el año de la obligación, aunque se reciban en otra fecha. Los documentos muestran el estado actual de los expedientes vinculados a este período.</p>
+    <div class="account-stats report-stats" aria-label="Resumen del año lectivo">
+      <div data-report-metric="students"><span>Estudiantes</span><strong>${snapshot.stats.students}</strong></div>
+      <div data-report-metric="enrollments"><span>Matrículas activas</span><strong>${snapshot.stats.enrollments}</strong></div>
+      <div data-report-metric="documents"><span>Documentos pendientes</span><strong>${snapshot.stats.documents}</strong></div>
+      <div data-report-metric="received"><span>Total recibido</span><strong>${money(totalReceived)}</strong></div>
+    </div>
+    <div class="row g-3 report-tables">
+      <div class="col-12 col-lg-6">${card("Distribución de matrículas activas", "clipboard-list", `<table class="table table-sm app-table report-table"><caption class="visually-hidden">Matrículas activas por grado en ${year}</caption><thead><tr><th scope="col">Grado</th><th scope="col" class="text-end">Matrículas activas</th></tr></thead><tbody>${gradeRows}</tbody><tfoot><tr><th scope="row">Total</th><td class="text-end" data-label="Matrículas activas" data-report-value="grade-total">${snapshot.stats.enrollments}</td></tr></tfoot></table>`)}</div>
+      <div class="col-12 col-lg-6">${card("Pagos válidos por concepto", "circle-dollar-sign", `<table class="table table-sm app-table report-table"><caption class="visually-hidden">Pagos por concepto de cargos del año lectivo ${year}</caption><thead><tr><th scope="col">Concepto</th><th scope="col" class="text-end">Pagos</th><th scope="col" class="text-end">Total recibido</th></tr></thead><tbody>${conceptRows}</tbody><tfoot><tr><th scope="row" colspan="2">Total del año lectivo</th><td class="text-end" data-label="Total recibido" data-report-value="total-received">${money(totalReceived)}</td></tr></tfoot></table>`)}</div>
+    </div>
+  </section>`;
 }
 async function reports() {
   return `${pageTitle("Reportes", "Resumen administrativo del año lectivo.")}<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2">${yearSelect()}${actionButton("print-report", "Imprimir reporte", "printer", "outline")}</div>${await reportBody()}`;
@@ -1159,9 +1186,12 @@ function printSection(title, body) {
   const dialog = document.createElement("dialog");
   dialog.className = "print-preview";
   dialog.innerHTML =
-    '<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2"><button class="btn btn-primary app-action" data-print>Imprimir</button><button class="btn btn-outline-primary app-action" data-close>Cerrar vista previa</button></div><iframe title="Vista previa del comprobante"></iframe>';
+    `<div class="page-tools d-flex flex-wrap justify-content-end align-items-end gap-2"><button class="btn btn-primary app-action" data-print>Imprimir</button><button class="btn btn-outline-primary app-action" data-close>Cerrar vista previa</button></div><iframe title="Vista previa de ${h(title)}"></iframe>`;
   document.body.append(dialog);
   const frame = dialog.querySelector("iframe");
+  const responsiveBody = body
+    .replace(/<table\b/gi, '<div class="print-table-wrap"><p class="print-table-hint">En móvil, cada cargo o pago se muestra en una ficha.</p><table')
+    .replace(/<\/table>/gi, "</table></div>");
   frame.srcdoc = /* HTML */ `<!doctype html>
     <html lang="es">
       <head>
@@ -1173,8 +1203,64 @@ function printSection(title, body) {
             margin: 35px;
             color: #102257;
           }
+          .visually-hidden {
+            position: absolute !important;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+          }
           h1 {
             font-size: 23px;
+          }
+          h2 {
+            font-size: 18px;
+            margin: 0;
+          }
+          .app-card {
+            margin: 16px 0;
+            border: 1px solid #d9e3ef;
+            border-radius: 8px;
+            padding: 12px;
+          }
+          .app-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid #d9e3ef;
+            padding-bottom: 8px;
+          }
+          .app-card-header .icon-disc {
+            display: none;
+          }
+          .app-card .card-body {
+            padding-top: 8px;
+          }
+          .account-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin: 14px 0;
+          }
+          .account-stats > div {
+            min-width: 0;
+            border: 1px solid #d9e3ef;
+            border-radius: 8px;
+            padding: 9px;
+          }
+          .account-stats span,
+          .account-stats strong {
+            display: block;
+          }
+          .account-stats span {
+            margin-bottom: 4px;
+            color: #536b8d;
+            font-size: 13px;
+          }
+          .account-stats strong {
+            font-size: 16px;
+            overflow-wrap: anywhere;
           }
           table {
             width: 100%;
@@ -1202,13 +1288,135 @@ function printSection(title, body) {
             margin-top: 20px;
             font-weight: bold;
           }
+          .print-amount {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+          }
+          .print-table-wrap {
+            max-width: 100%;
+          }
+          .print-table-hint {
+            display: none;
+          }
+          @media screen and (max-width: 600px) {
+            body {
+              margin: 16px;
+            }
+            .account-stats {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 8px;
+            }
+            .app-card {
+              padding: 9px;
+            }
+            .print-table-wrap {
+              overflow: visible;
+            }
+            .print-table-hint {
+              display: block;
+              margin: 0 0 10px;
+              color: #536b8d;
+              font-size: 12px;
+            }
+            table,
+            thead,
+            tbody,
+            tfoot,
+            tr,
+            th,
+            td {
+              display: block;
+            }
+            thead {
+              display: none;
+            }
+            tbody {
+              display: grid;
+              gap: 10px;
+            }
+            tfoot {
+              display: grid;
+              gap: 8px;
+            }
+            tr {
+              margin: 0;
+              border: 1px solid #d9e3ef;
+              border-radius: 8px;
+              background: #fff;
+              padding: 6px 9px;
+            }
+            td {
+              border: 0;
+              border-bottom: 1px solid #edf1f5;
+              padding: 5px 0;
+            }
+            td::before {
+              display: block;
+              margin-bottom: 2px;
+              color: #536b8d;
+              content: attr(data-label);
+              font-size: 11px;
+              font-weight: 700;
+            }
+            td:first-child {
+              font-weight: 700;
+            }
+            td:first-child::before {
+              display: none;
+            }
+            td:last-child {
+              border-bottom: 0;
+            }
+          }
+          @media print {
+            body {
+              margin: 0;
+            }
+            .print-table-wrap {
+              overflow: visible;
+            }
+            table {
+              display: table;
+            }
+            thead {
+              display: table-header-group;
+            }
+            tbody {
+              display: table-row-group;
+            }
+            tfoot {
+              display: table-footer-group;
+            }
+            tr {
+              display: table-row;
+              border: 0;
+              padding: 0;
+            }
+            th,
+            td {
+              display: table-cell;
+            }
+            td::before {
+              display: none;
+            }
+            .print-table-hint {
+              display: none;
+            }
+            tr {
+              break-inside: avoid;
+            }
+            h1,
+            h2 {
+              break-after: avoid;
+            }
+          }
         </style>
       </head>
       <body>
         <p>Sistema de Gestión de Matrícula y Mensualidades de Primaria</p>
         <h1>${h(title)}</h1>
         <p>Fecha de emisión: ${new Date().toLocaleDateString("es-NI")}</p>
-        ${body}
+        ${responsiveBody}
       </body>
     </html>`;
   dialog.querySelector("[data-print]").onclick = () =>
@@ -1221,6 +1429,42 @@ function printSection(title, body) {
 async function handleAction(button) {
   const action = button.dataset.action,
     id = button.dataset.id;
+  if (action === "reset-demo") {
+    if (
+      !(await confirmAction(
+        "Restaurar datos ficticios",
+        "Se reemplazarán las colecciones de demostración y se perderán los cambios locales de estudiantes, responsables, matrículas, documentos, cargos, descuentos y pagos. Las demás claves de localStorage se conservarán. ¿Desea continuar?",
+        "Restaurar demostración",
+      ))
+    )
+      return;
+    try {
+      resetDemoData();
+      state.reportSnapshot = null;
+      state.selectedStudent = null;
+      state.editingStudent = null;
+      state.showStudentForm = false;
+      state.dossier = false;
+      state.dirty = false;
+      state.search = "";
+      state.gradeFilter = "";
+      state.cashSearch = "";
+      state.year = 2026;
+      state.page = "dashboard";
+      state.tab = "data";
+      state.user = await api("/me").catch(() => null);
+      if (state.user) await go("dashboard");
+      else login();
+      await notify(
+        "Demostración restaurada",
+        "Se cargó el escenario ficticio de 30 estudiantes para 2026.",
+      );
+    } catch (error) {
+      if (error.code?.startsWith("DEMO_STORAGE")) login(error.message);
+      else notify("No se pudo restaurar la demostración", error.message);
+    }
+    return;
+  }
   if (action === "select-cash-student" || action === "change-cash-student") {
     if (state.dirty && !(await confirmAction("Cambios sin guardar", "Cambiar el estudiante descartará el formulario actual. ¿Continuar?"))) return;
     state.dirty = false;
@@ -1288,13 +1532,27 @@ async function handleAction(button) {
   }
   if (action === "discount-charge") {
     const c = state.charges.find((c) => c.id === Number(id));
-    const r = await Swal.fire({
+    const r = await showDialog({
       title: "Autorizar descuento",
-      html: `<p>${h(c.concept)} · ${state.year} · cargo ${money(c.amount_cents)} · pagado ${money(c.paid_cents)}</p><label>Porcentaje<input id="disc-percent" type="number" min="1" max="100" value="10" class="swal2-input"></label><label>Base<select id="disc-basis" class="swal2-input"><option>Monto original del cargo</option><option>Saldo pendiente del cargo</option></select></label><label>Motivo<input id="disc-reason" class="swal2-input"></label><p id="disc-preview" aria-live="polite"></p>`,
+      html: `<div class="app-swal-form">
+        <p class="app-swal-context">${h(c.concept)} · ${state.year}<br>Cargo ${money(c.amount_cents)} · Pagado ${money(c.paid_cents)}</p>
+        <label class="app-swal-field" for="disc-percent"><span>Porcentaje</span>
+          <input id="disc-percent" class="form-control" type="number" min="1" max="100" value="10" required>
+        </label>
+        <label class="app-swal-field" for="disc-basis"><span>Calcular sobre</span>
+          <select id="disc-basis" class="form-select"><option>Monto original del cargo</option><option>Saldo pendiente del cargo</option></select>
+        </label>
+        <label class="app-swal-field" for="disc-reason"><span>Motivo</span>
+          <input id="disc-reason" class="form-control" type="text" autocomplete="off">
+        </label>
+        <p id="disc-preview" class="app-swal-note" aria-live="polite"></p>
+      </div>`,
       showCancelButton: true,
+      focusCancel: false,
+      customClass: { popup: "app-swal-popup app-swal-popup--form" },
       confirmButtonText: "Autorizar",
       cancelButtonText: "Cancelar",
-      didOpen: () => {
+      didOpen: (popup) => {
         const update = () => {
           const base = document.querySelector("#disc-basis").selectedIndex
             ? c.balance_cents
@@ -1309,6 +1567,7 @@ async function handleAction(button) {
         document.querySelector("#disc-percent").oninput = update;
         document.querySelector("#disc-basis").onchange = update;
         update();
+        popup.querySelector("#disc-percent")?.focus({ preventScroll: true });
       },
       preConfirm: async () => {
         try {
@@ -1334,9 +1593,22 @@ async function handleAction(button) {
   if (action === "logout") {
     await api("/logout", { method: "POST" });
     state.user = null;
+    state.page = "dashboard";
     state.selectedStudent = null;
+    state.editingStudent = null;
+    state.showStudentForm = false;
     state.dossier = false;
+    state.tab = "data";
+    state.cashTab = "pay";
+    state.cashSearch = "";
+    state.paymentSearch = "";
+    state.paymentMonth = "";
+    state.paymentConcept = "";
+    state.search = "";
+    state.gradeFilter = "";
     state.year = yearNow();
+    state.dirty = false;
+    state.formBaseline = "";
     login();
     return;
   }
@@ -1390,15 +1662,22 @@ async function handleAction(button) {
     return;
   }
   if (action === "confirm-enrollment") {
-    const r = await Swal.fire({
+    const r = await showDialog({
       title: "Confirmar matrícula",
       input: "number",
       inputLabel: "Monto de matrícula (C$)",
       inputAttributes: { min: "0.01", step: "0.01" },
       showCancelButton: true,
+      focusCancel: false,
+      customClass: { popup: "app-swal-popup app-swal-popup--form" },
       confirmButtonText: "Confirmar",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#1069e8",
+      inputValidator: (value) => {
+        const amount = String(value ?? "").trim();
+        return !/^\d+(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0
+          ? "Ingrese un monto positivo con hasta dos decimales."
+          : undefined;
+      },
     });
     if (!r.isConfirmed) return;
     await api(`/enrollments/${id}/confirm`, {
@@ -1435,43 +1714,40 @@ async function handleAction(button) {
   }
   if (action === "edit-document") {
     const status = button.dataset.status;
-    const result = await Swal.fire({
+    const result = await showDialog({
       title: button.dataset.kind,
-      html: /* HTML */ `<label for="doc-status">Estado documental</label
-        ><select id="doc-status" class="swal2-input">
-          <option ${status === "Entregado" ? "selected" : ""}>Entregado</option>
-          <option ${status === "Pendiente" ? "selected" : ""}>Pendiente</option>
-          <option ${status === "No requerido" ? "selected" : ""}>
-            No requerido
-          </option></select
-        ><label for="doc-date" id="doc-date-label">Fecha de entrega</label
-        ><input
-          id="doc-date"
-          class="swal2-input"
-          type="date"
-          value="${h(button.dataset.date || today())}"
-        /><label for="doc-notes">Observaciones (opcional)</label
-        ><textarea
-          id="doc-notes"
-          class="swal2-textarea"
-          placeholder="Observaciones"
-        >
-${h(button.dataset.notes)}</textarea
-        >`,
+      html: /* HTML */ `<div class="app-swal-form">
+        <label class="app-swal-field" for="doc-status"><span>Estado documental</span>
+          <select id="doc-status" class="form-select">
+            <option ${status === "Entregado" ? "selected" : ""}>Entregado</option>
+            <option ${status === "Pendiente" ? "selected" : ""}>Pendiente</option>
+            <option ${status === "No requerido" ? "selected" : ""}>No requerido</option>
+          </select>
+        </label>
+        <label class="app-swal-field" for="doc-date" id="doc-date-field"><span>Fecha de entrega</span>
+          <input id="doc-date" class="form-control" type="date" value="${h(button.dataset.date || today())}">
+        </label>
+        <label class="app-swal-field" for="doc-notes"><span>Observaciones (opcional)</span>
+          <textarea id="doc-notes" class="form-control" rows="4" placeholder="Agregue un detalle si hace falta">${h(button.dataset.notes)}</textarea>
+        </label>
+      </div>`,
       showCancelButton: true,
+      focusCancel: false,
+      customClass: { popup: "app-swal-popup app-swal-popup--form" },
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#1069e8",
-      didOpen: () => {
+      didOpen: (popup) => {
         const status = document.querySelector("#doc-status"),
-          date = document.querySelector("#doc-date");
+          date = document.querySelector("#doc-date"),
+          dateField = document.querySelector("#doc-date-field");
         const update = () => {
           date.hidden = status.value !== "Entregado";
           date.required = !date.hidden;
-          document.querySelector("#doc-date-label").hidden = date.hidden;
+          dateField.hidden = date.hidden;
         };
         status.addEventListener("change", update);
         update();
+        popup.querySelector("#doc-status")?.focus({ preventScroll: true });
       },
       preConfirm: () => {
         if (
@@ -1515,17 +1791,25 @@ ${h(button.dataset.notes)}</textarea
     );
   }
   if (action === "void-payment") {
-    const r = await Swal.fire({
+    const r = await showDialog({
       title: "Anular pago",
       html: await paymentContext(id),
       input: "textarea",
       inputLabel: "Motivo de anulación",
       showCancelButton: true,
+      focusCancel: false,
+      customClass: {
+        popup: "app-swal-popup app-swal-popup--form",
+        confirmButton: "app-swal-confirm app-swal-danger",
+      },
       confirmButtonText: "Anular pago",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#d12b43",
       inputValidator: (v) =>
-        !v || v.trim().length < 5 ? "Escriba al menos 5 caracteres" : undefined,
+        !v || v.trim().length < 5
+          ? "Escriba al menos 5 caracteres."
+          : undefined,
+      didOpen: (popup) =>
+        popup.querySelector(".swal2-textarea")?.focus({ preventScroll: true }),
     });
     if (!r.isConfirmed) return;
     await api(`/payments/${id}/void`, {
@@ -1657,15 +1941,32 @@ document.addEventListener("input", (event) => {
 });
 document.addEventListener("invalid", (event) => {
   const input = event.target;
-  if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
-    if (input.form?.id && input.form.id !== "login-form")
-      showFieldError(
-        input,
-        input instanceof HTMLInputElement && input.type === "email" && input.validity.typeMismatch
+  if (
+    input instanceof HTMLInputElement ||
+    input instanceof HTMLSelectElement ||
+    input instanceof HTMLTextAreaElement
+  ) {
+    if (input.form?.id && input.form.id !== "login-form") {
+      const label = input.labels?.[0]?.textContent
+        ?.replace(/\*/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const message = input.validity.valueMissing
+        ? `${label || "Este campo"} es obligatorio.`
+        : input.validity.typeMismatch && input.type === "email"
           ? "Escribe un correo electrónico válido."
-          : input.validationMessage || "Revise este campo.",
-        { focus: false },
-      );
+          : input.validity.patternMismatch
+            ? input.title || "Revise el formato de este campo."
+            : input.validity.rangeUnderflow
+              ? `El valor debe ser igual o mayor que ${input.min}.`
+              : input.validity.rangeOverflow
+                ? `El valor debe ser igual o menor que ${input.max}.`
+                : input.validity.stepMismatch
+                  ? `Use incrementos de ${input.step}.`
+                  : "Revise el valor de este campo.";
+      input.setCustomValidity(message);
+      showFieldError(input, message, { focus: false });
+    }
   }
 }, true);
 window.addEventListener("beforeunload", (e) => {
@@ -1683,17 +1984,29 @@ function formSignature() {
   );
 }
 function configureInputs() {
+  reindexGuardians();
   document
     .querySelectorAll('[name="birth_date"]')
     .forEach((el) => (el.max = today()));
   document.querySelectorAll('[name="g_phone"]').forEach((el) => {
-    el.pattern = "[+0-9 ()-]{8,25}";
+    el.pattern = "[+0-9 \\(\\)\\-]{8,25}";
     el.title = "Entre 8 y 15 dígitos; admite +, espacios y guiones";
-    if (!el.parentElement.querySelector("small"))
+    let hint = el.parentElement.querySelector("small");
+    if (!hint) {
       el.insertAdjacentHTML(
         "afterend",
-        "<small>8 a 15 dígitos; admite +, espacios y guiones.</small>",
+        "<small>Ejemplo: 8888-8888 o +505 8888-8888.</small>",
       );
+      hint = el.parentElement.querySelector("small");
+    }
+    if (el.id && hint) {
+      hint.id ||= `${el.id}-hint`;
+      const describedBy = new Set(
+        (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean),
+      );
+      describedBy.add(hint.id);
+      el.setAttribute("aria-describedby", [...describedBy].join(" "));
+    }
   });
   document.querySelectorAll('[name="g_address"]').forEach((el) => {
     if (!el.parentElement.querySelector("button"))
@@ -1809,13 +2122,13 @@ async function refreshCashDraft() {
 }
 async function paymentContext(id) {
   const p = (await api("/payments")).find((p) => p.id === Number(id));
-  return `<p>${h(p.student_name)} · Comprobante #${p.id}</p><p>${h(p.concept)} ${p.month ? monthLabel(p.month) : ""} · ${p.school_year} · ${money(p.amount_cents)}</p>`;
+  return `<div class="app-swal-context"><strong>${h(p.student_name)}</strong><br>Comprobante #${p.id}<br>${h(p.concept)} ${p.month ? monthLabel(p.month) : ""} · ${p.school_year} · ${money(p.amount_cents)}</div>`;
 }
 function filterStudentTable() {
   const q =
       document
         .querySelector("#student-search")
-        ?.value.toLocaleLowerCase("es") || "",
+        ?.value.trim().toLocaleLowerCase("es") || "",
     g = document.querySelector("#student-grade")?.value;
   state.search = q;
   state.gradeFilter = g;
@@ -1827,6 +2140,7 @@ function filterStudentTable() {
           .toLocaleLowerCase("es")
           .includes(q),
     ),
+    Boolean(q || g),
   );
   icons();
 }
@@ -1947,7 +2261,7 @@ document.addEventListener("submit", async (event) => {
       const saved = await api("/payments", { method: "POST", body: data });
       state.dirty = false;
       await refresh();
-      const r = await Swal.fire({
+      const r = await showDialog({
         title: "Pago registrado",
         text: "El saldo se actualizó. Puede imprimir el comprobante o registrar otro pago.",
         showCancelButton: true,
@@ -1977,8 +2291,10 @@ document.addEventListener("submit", async (event) => {
   }
 });
 try {
+  initializeDemoData();
   state.user = await api("/me");
   await go("dashboard");
-} catch {
-  login();
+} catch (error) {
+  if (error.code?.startsWith("DEMO_STORAGE")) login(error.message);
+  else login();
 }
