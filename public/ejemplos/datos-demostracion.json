@@ -1,0 +1,1389 @@
+{
+  "version": 1,
+  "demo": true,
+  "description": "Doce estudiantes ficticios con dos hijos vinculados al mismo tutor, responsables múltiples, pagos, abonos, descuentos, documentos y saldos distintos.",
+  "students": [
+    {
+      "id": 1,
+      "names": "Ana",
+      "surnames": "López Demo",
+      "birth_date": "2017-06-12",
+      "sex": "Femenino",
+      "address": "Barrio Central, Managua",
+      "grade": 4,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 2,
+      "names": "Mateo",
+      "surnames": "Torres Demo",
+      "birth_date": "2019-03-08",
+      "sex": "Masculino",
+      "address": "Colonia Norte, Managua",
+      "grade": 1,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 3,
+      "names": "Sofía",
+      "surnames": "Ramírez Demo",
+      "birth_date": "2018-08-21",
+      "sex": "Femenino",
+      "address": "Residencial Las Flores, Managua",
+      "grade": 2,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 4,
+      "names": "Lucas",
+      "surnames": "Martínez Demo",
+      "birth_date": "2018-11-02",
+      "sex": "Masculino",
+      "address": "Barrio San José, Managua",
+      "grade": 3,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 5,
+      "names": "Valentina",
+      "surnames": "Cruz Demo",
+      "birth_date": "2015-04-03",
+      "sex": "Femenino",
+      "address": "Dirección ficticia 5, Managua",
+      "grade": 5,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 6,
+      "names": "Diego",
+      "surnames": "Salazar Demo",
+      "birth_date": "2014-09-17",
+      "sex": "Masculino",
+      "address": "Dirección ficticia 6, Managua",
+      "grade": 6,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 7,
+      "names": "Camila",
+      "surnames": "Reyes Demo",
+      "birth_date": "2017-02-14",
+      "sex": "Femenino",
+      "address": "Dirección ficticia 7, Managua",
+      "grade": 3,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 8,
+      "names": "Andrés",
+      "surnames": "Morales Demo",
+      "birth_date": "2018-10-11",
+      "sex": "Masculino",
+      "address": "Dirección ficticia 8, Managua",
+      "grade": 2,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 9,
+      "names": "Lucía",
+      "surnames": "Herrera Demo",
+      "birth_date": "2019-06-21",
+      "sex": "Femenino",
+      "address": "Dirección ficticia 9, Managua",
+      "grade": 1,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 10,
+      "names": "Samuel",
+      "surnames": "Ortega Demo",
+      "birth_date": "2016-12-05",
+      "sex": "Masculino",
+      "address": "Dirección ficticia 10, Managua",
+      "grade": 4,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 11,
+      "names": "Emma",
+      "surnames": "Navarro Demo",
+      "birth_date": "2014-05-09",
+      "sex": "Femenino",
+      "address": "Dirección ficticia 11, Managua",
+      "grade": 6,
+      "school_year": 2026,
+      "status": "Activo"
+    },
+    {
+      "id": 12,
+      "names": "Nicolás",
+      "surnames": "Castro Demo",
+      "birth_date": "2015-08-30",
+      "sex": "Masculino",
+      "address": "Dirección ficticia 12, Managua",
+      "grade": 5,
+      "school_year": 2026,
+      "status": "Activo"
+    }
+  ],
+  "guardians": [
+    {
+      "id": 1,
+      "student_id": 1,
+      "names": "Marta",
+      "surnames": "López Demo",
+      "relationship": "Madre",
+      "phone": "8888-0001",
+      "address": "Barrio Central, Managua",
+      "email": "marta.demo@example.com",
+      "identity_number": "DEMO-001"
+    },
+    {
+      "id": 2,
+      "student_id": 1,
+      "names": "José",
+      "surnames": "López Demo",
+      "relationship": "Padre",
+      "phone": "8888-0002",
+      "address": "Barrio Central, Managua",
+      "email": null,
+      "identity_number": "DEMO-002"
+    },
+    {
+      "id": 3,
+      "student_id": 2,
+      "names": "Carla",
+      "surnames": "Torres Demo",
+      "relationship": "Madre",
+      "phone": "8888-0003",
+      "address": "Colonia Norte, Managua",
+      "email": null,
+      "identity_number": null
+    },
+    {
+      "id": 4,
+      "student_id": 3,
+      "names": "Daniel",
+      "surnames": "Ramírez Demo",
+      "relationship": "Padre",
+      "phone": "8888-0004",
+      "address": "Residencial Las Flores, Managua",
+      "email": null,
+      "identity_number": null
+    },
+    {
+      "id": 5,
+      "student_id": 4,
+      "names": "Elena",
+      "surnames": "Martínez Demo",
+      "relationship": "Madre",
+      "phone": "8888-0005",
+      "address": "Barrio San José, Managua",
+      "email": null,
+      "identity_number": null
+    },
+    {
+      "id": 6,
+      "student_id": 4,
+      "names": "Marta",
+      "surnames": "López Demo",
+      "relationship": "Tutora",
+      "phone": "8888-0001",
+      "address": "Barrio Central, Managua",
+      "email": "marta.demo@example.com",
+      "identity_number": "DEMO-001"
+    },
+    {
+      "id": 7,
+      "student_id": 5,
+      "names": "Laura",
+      "surnames": "Cruz Demo",
+      "relationship": "Madre",
+      "phone": "8888-0006",
+      "address": "Dirección ficticia 5, Managua",
+      "email": "familia5.demo@example.com",
+      "identity_number": "DEMO-005"
+    },
+    {
+      "id": 8,
+      "student_id": 6,
+      "names": "Pablo",
+      "surnames": "Salazar Demo",
+      "relationship": "Padre",
+      "phone": "8888-0007",
+      "address": "Dirección ficticia 6, Managua",
+      "email": "familia6.demo@example.com",
+      "identity_number": "DEMO-006"
+    },
+    {
+      "id": 9,
+      "student_id": 7,
+      "names": "Julia",
+      "surnames": "Reyes Demo",
+      "relationship": "Madre",
+      "phone": "8888-0008",
+      "address": "Dirección ficticia 7, Managua",
+      "email": "familia7.demo@example.com",
+      "identity_number": "DEMO-007"
+    },
+    {
+      "id": 10,
+      "student_id": 8,
+      "names": "Roberto",
+      "surnames": "Morales Demo",
+      "relationship": "Padre",
+      "phone": "8888-0009",
+      "address": "Dirección ficticia 8, Managua",
+      "email": "familia8.demo@example.com",
+      "identity_number": "DEMO-008"
+    },
+    {
+      "id": 11,
+      "student_id": 9,
+      "names": "Diana",
+      "surnames": "Herrera Demo",
+      "relationship": "Madre",
+      "phone": "8888-0010",
+      "address": "Dirección ficticia 9, Managua",
+      "email": "familia9.demo@example.com",
+      "identity_number": "DEMO-009"
+    },
+    {
+      "id": 12,
+      "student_id": 10,
+      "names": "María",
+      "surnames": "Ortega Demo",
+      "relationship": "Madre",
+      "phone": "8888-0011",
+      "address": "Dirección ficticia 10, Managua",
+      "email": "familia10.demo@example.com",
+      "identity_number": "DEMO-010"
+    },
+    {
+      "id": 13,
+      "student_id": 11,
+      "names": "Ana",
+      "surnames": "Navarro Demo",
+      "relationship": "Madre",
+      "phone": "8888-0012",
+      "address": "Dirección ficticia 11, Managua",
+      "email": "familia11.demo@example.com",
+      "identity_number": "DEMO-011"
+    },
+    {
+      "id": 14,
+      "student_id": 12,
+      "names": "Jorge",
+      "surnames": "Castro Demo",
+      "relationship": "Padre",
+      "phone": "8888-0013",
+      "address": "Dirección ficticia 12, Managua",
+      "email": "familia12.demo@example.com",
+      "identity_number": "DEMO-012"
+    }
+  ],
+  "enrollments": [
+    {
+      "id": 1,
+      "student_id": 1,
+      "grade": 4,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-08"
+    },
+    {
+      "id": 2,
+      "student_id": 2,
+      "grade": 1,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-10"
+    },
+    {
+      "id": 3,
+      "student_id": 3,
+      "grade": 2,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-11"
+    },
+    {
+      "id": 4,
+      "student_id": 4,
+      "grade": 3,
+      "school_year": 2026,
+      "status": "Prematrícula",
+      "date": "2026-10-15"
+    },
+    {
+      "id": 5,
+      "student_id": 5,
+      "grade": 5,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-12",
+      "created_at": "2026-01-12T09:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "student_id": 6,
+      "grade": 6,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-13",
+      "created_at": "2026-01-13T09:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "student_id": 7,
+      "grade": 3,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-14",
+      "created_at": "2026-01-14T09:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "student_id": 8,
+      "grade": 2,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-15",
+      "created_at": "2026-01-15T09:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "student_id": 9,
+      "grade": 1,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-16",
+      "created_at": "2026-01-16T09:00:00.000Z"
+    },
+    {
+      "id": 10,
+      "student_id": 10,
+      "grade": 4,
+      "school_year": 2026,
+      "status": "Prematrícula",
+      "date": "2026-01-17",
+      "created_at": "2026-01-17T09:00:00.000Z"
+    },
+    {
+      "id": 11,
+      "student_id": 11,
+      "grade": 6,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-18",
+      "created_at": "2026-01-18T09:00:00.000Z"
+    },
+    {
+      "id": 12,
+      "student_id": 12,
+      "grade": 5,
+      "school_year": 2026,
+      "status": "Activa",
+      "date": "2026-01-19",
+      "created_at": "2026-01-19T09:00:00.000Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": 1,
+      "student_id": 1,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-08",
+      "notes": "Archivo incluido en este JSON de demostración.",
+      "file_name": "partida-nacimiento-ejemplo.txt",
+      "file_type": "text/plain",
+      "file_size": 246,
+      "file_data": "data:text/plain;base64,RE9DVU1FTlRPIERFIEVKRU1QTE8g4oCUIFNJTiBWQUxJREVaIE9GSUNJQUwKClRpcG86IFBhcnRpZGEgZGUgbmFjaW1pZW50bwpFc3R1ZGlhbnRlOiBBbmEgTMOzcGV6IERlbW8KRmVjaGEgZGUgbmFjaW1pZW50bzogMTIvMDYvMjAxNwpBw7FvIGxlY3Rpdm8gZGUgZGVtb3N0cmFjacOzbjogMjAyNgoKRXN0ZSBhcmNoaXZvIGZpY3RpY2lvIHNpcnZlIHBhcmEgcHJvYmFyIGxhIG9wY2nDs24gwqtJbXBvcnRhciBkb2N1bWVudG/Cuy4K"
+    },
+    {
+      "id": 2,
+      "student_id": 1,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-08",
+      "notes": "Copia recibida."
+    },
+    {
+      "id": 3,
+      "student_id": 1,
+      "kind": "Notas del grado anterior",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": "Solicitar notas del ciclo anterior."
+    },
+    {
+      "id": 4,
+      "student_id": 1,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 5,
+      "student_id": 1,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 6,
+      "student_id": 2,
+      "kind": "Partida de nacimiento",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": "Pendiente de entrega."
+    },
+    {
+      "id": 7,
+      "student_id": 2,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-10",
+      "notes": ""
+    },
+    {
+      "id": 8,
+      "student_id": 2,
+      "kind": "Notas del grado anterior",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": "Primer grado."
+    },
+    {
+      "id": 9,
+      "student_id": 2,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 10,
+      "student_id": 2,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 11,
+      "student_id": 3,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-11",
+      "notes": ""
+    },
+    {
+      "id": 12,
+      "student_id": 3,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-11",
+      "notes": ""
+    },
+    {
+      "id": 13,
+      "student_id": 3,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-11",
+      "notes": ""
+    },
+    {
+      "id": 14,
+      "student_id": 3,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 15,
+      "student_id": 3,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 16,
+      "student_id": 4,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-10-15",
+      "notes": ""
+    },
+    {
+      "id": 17,
+      "student_id": 4,
+      "kind": "Identificación del responsable",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 18,
+      "student_id": 4,
+      "kind": "Notas del grado anterior",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 19,
+      "student_id": 4,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 20,
+      "student_id": 4,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 21,
+      "student_id": 5,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-12",
+      "notes": ""
+    },
+    {
+      "id": 22,
+      "student_id": 5,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-12",
+      "notes": ""
+    },
+    {
+      "id": 23,
+      "student_id": 5,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-12",
+      "notes": ""
+    },
+    {
+      "id": 24,
+      "student_id": 5,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 25,
+      "student_id": 5,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 26,
+      "student_id": 6,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-13",
+      "notes": ""
+    },
+    {
+      "id": 27,
+      "student_id": 6,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-13",
+      "notes": ""
+    },
+    {
+      "id": 28,
+      "student_id": 6,
+      "kind": "Notas del grado anterior",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 29,
+      "student_id": 6,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 30,
+      "student_id": 6,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 31,
+      "student_id": 7,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-14",
+      "notes": ""
+    },
+    {
+      "id": 32,
+      "student_id": 7,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-14",
+      "notes": ""
+    },
+    {
+      "id": 33,
+      "student_id": 7,
+      "kind": "Notas del grado anterior",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 34,
+      "student_id": 7,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 35,
+      "student_id": 7,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 36,
+      "student_id": 8,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-15",
+      "notes": ""
+    },
+    {
+      "id": 37,
+      "student_id": 8,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-15",
+      "notes": ""
+    },
+    {
+      "id": 38,
+      "student_id": 8,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-15",
+      "notes": ""
+    },
+    {
+      "id": 39,
+      "student_id": 8,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 40,
+      "student_id": 8,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 41,
+      "student_id": 9,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-16",
+      "notes": ""
+    },
+    {
+      "id": 42,
+      "student_id": 9,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-16",
+      "notes": ""
+    },
+    {
+      "id": 43,
+      "student_id": 9,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-16",
+      "notes": ""
+    },
+    {
+      "id": 44,
+      "student_id": 9,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 45,
+      "student_id": 9,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 46,
+      "student_id": 10,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-17",
+      "notes": ""
+    },
+    {
+      "id": 47,
+      "student_id": 10,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-17",
+      "notes": ""
+    },
+    {
+      "id": 48,
+      "student_id": 10,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-17",
+      "notes": ""
+    },
+    {
+      "id": 49,
+      "student_id": 10,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 50,
+      "student_id": 10,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 51,
+      "student_id": 11,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-18",
+      "notes": ""
+    },
+    {
+      "id": 52,
+      "student_id": 11,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-18",
+      "notes": ""
+    },
+    {
+      "id": 53,
+      "student_id": 11,
+      "kind": "Notas del grado anterior",
+      "status": "Pendiente",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 54,
+      "student_id": 11,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 55,
+      "student_id": 11,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 56,
+      "student_id": 12,
+      "kind": "Partida de nacimiento",
+      "status": "Entregado",
+      "delivered_at": "2026-01-19",
+      "notes": ""
+    },
+    {
+      "id": 57,
+      "student_id": 12,
+      "kind": "Identificación del responsable",
+      "status": "Entregado",
+      "delivered_at": "2026-01-19",
+      "notes": ""
+    },
+    {
+      "id": 58,
+      "student_id": 12,
+      "kind": "Notas del grado anterior",
+      "status": "Entregado",
+      "delivered_at": "2026-01-19",
+      "notes": ""
+    },
+    {
+      "id": 59,
+      "student_id": 12,
+      "kind": "Documento de traslado",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    },
+    {
+      "id": 60,
+      "student_id": 12,
+      "kind": "Epicrisis",
+      "status": "No requerido",
+      "delivered_at": null,
+      "notes": ""
+    }
+  ],
+  "charges": [
+    {
+      "id": 1,
+      "student_id": 1,
+      "enrollment_id": 1,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 2,
+      "student_id": 1,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 9,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 3,
+      "student_id": 1,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 4,
+      "student_id": 2,
+      "enrollment_id": 2,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 5,
+      "student_id": 2,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 6,
+      "student_id": 3,
+      "enrollment_id": 3,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 7,
+      "student_id": 3,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 9,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 8,
+      "student_id": 3,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 9,
+      "student_id": 5,
+      "enrollment_id": 5,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 10,
+      "student_id": 5,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 11,
+      "student_id": 6,
+      "enrollment_id": 6,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 12,
+      "student_id": 6,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 13,
+      "student_id": 7,
+      "enrollment_id": 7,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 14,
+      "student_id": 7,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 15,
+      "student_id": 8,
+      "enrollment_id": 8,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 16,
+      "student_id": 8,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 17,
+      "student_id": 9,
+      "enrollment_id": 9,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 18,
+      "student_id": 9,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 19,
+      "student_id": 11,
+      "enrollment_id": 11,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 20,
+      "student_id": 11,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    },
+    {
+      "id": 21,
+      "student_id": 12,
+      "enrollment_id": 12,
+      "concept": "Matrícula",
+      "month": null,
+      "school_year": 2026,
+      "amount_cents": 80000
+    },
+    {
+      "id": 22,
+      "student_id": 12,
+      "enrollment_id": null,
+      "concept": "Mensualidad",
+      "month": 10,
+      "school_year": 2026,
+      "amount_cents": 50000
+    }
+  ],
+  "discounts": [
+    {
+      "id": 1,
+      "charge_id": 3,
+      "reason": "Dos hermanos (ejemplo)",
+      "percent": 10,
+      "basis": "Monto original del cargo",
+      "original_cents": 50000,
+      "discount_cents": 5000,
+      "final_cents": 45000,
+      "authorized_by": "directora",
+      "authorized_at": "2026-10-02T10:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "charge_id": 12,
+      "reason": "Apoyo de demostración",
+      "percent": 10,
+      "basis": "Monto original del cargo",
+      "original_cents": 50000,
+      "discount_cents": 5000,
+      "final_cents": 45000,
+      "authorized_by": "directora",
+      "authorized_at": "2026-10-13T08:00:00.000Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": 1,
+      "charge_id": 1,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-08T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 2,
+      "charge_id": 2,
+      "amount_cents": 20000,
+      "paid_at": "2026-09-10T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 3,
+      "charge_id": 6,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-11T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 4,
+      "charge_id": 7,
+      "amount_cents": 50000,
+      "paid_at": "2026-09-08T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 5,
+      "charge_id": 8,
+      "amount_cents": 50000,
+      "paid_at": "2026-10-05T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 6,
+      "charge_id": 2,
+      "amount_cents": 10000,
+      "paid_at": "2026-09-12T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Anulado",
+      "void_reason": "Duplicado de demostración",
+      "voided_at": "2026-09-12T11:00:00.000Z",
+      "voided_by": "directora"
+    },
+    {
+      "id": 7,
+      "charge_id": 9,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-12T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 8,
+      "charge_id": 10,
+      "amount_cents": 50000,
+      "paid_at": "2026-10-12T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 9,
+      "charge_id": 11,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-13T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 10,
+      "charge_id": 12,
+      "amount_cents": 25000,
+      "paid_at": "2026-10-13T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 11,
+      "charge_id": 15,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-15T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 12,
+      "charge_id": 16,
+      "amount_cents": 50000,
+      "paid_at": "2026-10-15T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 13,
+      "charge_id": 17,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-16T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 14,
+      "charge_id": 18,
+      "amount_cents": 50000,
+      "paid_at": "2026-10-16T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 15,
+      "charge_id": 21,
+      "amount_cents": 80000,
+      "paid_at": "2026-01-19T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    },
+    {
+      "id": 16,
+      "charge_id": 22,
+      "amount_cents": 50000,
+      "paid_at": "2026-10-19T10:00:00.000Z",
+      "created_by": "caja",
+      "status": "Válido",
+      "void_reason": null,
+      "voided_at": null,
+      "voided_by": null
+    }
+  ],
+  "activity": [
+    {
+      "id": 1,
+      "label": "Matrícula registrada",
+      "detail": "Ana López Demo",
+      "created_at": "2026-01-08T10:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "label": "Abono registrado",
+      "detail": "Ana López Demo · saldo C$ 300.00",
+      "created_at": "2026-09-10T10:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "label": "Pago registrado",
+      "detail": "Sofía Ramírez Demo",
+      "created_at": "2026-10-05T10:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "label": "Prematrícula registrada",
+      "detail": "Lucas Martínez Demo",
+      "created_at": "2026-10-15T10:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "label": "Matrícula registrada",
+      "detail": "Valentina Cruz Demo",
+      "created_at": "2026-01-12T09:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "label": "Pago registrado",
+      "detail": "Valentina Cruz Demo",
+      "created_at": "2026-10-12T10:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "label": "Matrícula registrada",
+      "detail": "Diego Salazar Demo",
+      "created_at": "2026-01-13T09:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "label": "Matrícula registrada",
+      "detail": "Camila Reyes Demo",
+      "created_at": "2026-01-14T09:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "label": "Matrícula registrada",
+      "detail": "Andrés Morales Demo",
+      "created_at": "2026-01-15T09:00:00.000Z"
+    },
+    {
+      "id": 10,
+      "label": "Pago registrado",
+      "detail": "Andrés Morales Demo",
+      "created_at": "2026-10-15T10:00:00.000Z"
+    },
+    {
+      "id": 11,
+      "label": "Matrícula registrada",
+      "detail": "Lucía Herrera Demo",
+      "created_at": "2026-01-16T09:00:00.000Z"
+    },
+    {
+      "id": 12,
+      "label": "Pago registrado",
+      "detail": "Lucía Herrera Demo",
+      "created_at": "2026-10-16T10:00:00.000Z"
+    },
+    {
+      "id": 13,
+      "label": "Prematrícula registrada",
+      "detail": "Samuel Ortega Demo",
+      "created_at": "2026-01-17T09:00:00.000Z"
+    },
+    {
+      "id": 14,
+      "label": "Matrícula registrada",
+      "detail": "Emma Navarro Demo",
+      "created_at": "2026-01-18T09:00:00.000Z"
+    },
+    {
+      "id": 15,
+      "label": "Matrícula registrada",
+      "detail": "Nicolás Castro Demo",
+      "created_at": "2026-01-19T09:00:00.000Z"
+    },
+    {
+      "id": 16,
+      "label": "Pago registrado",
+      "detail": "Nicolás Castro Demo",
+      "created_at": "2026-10-19T10:00:00.000Z"
+    }
+  ]
+}
