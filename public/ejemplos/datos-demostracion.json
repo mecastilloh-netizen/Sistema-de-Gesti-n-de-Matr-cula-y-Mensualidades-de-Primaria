@@ -1288,6 +1288,18 @@
       "voided_by": null
     }
   ],
+  "annulments": [
+    {
+      "id": 1,
+      "payment_id": 6,
+      "student_id": 1,
+      "paid_at": "2026-09-12T10:00:00.000Z",
+      "amount_cents": 10000,
+      "reason": "Duplicado de demostración",
+      "voided_at": "2026-09-12T11:00:00.000Z",
+      "voided_by": "directora"
+    }
+  ],
   "activity": [
     {
       "id": 1,

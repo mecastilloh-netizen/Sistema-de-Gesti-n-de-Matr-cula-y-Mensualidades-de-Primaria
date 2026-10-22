@@ -307,9 +307,14 @@ main#main {
 .page-tools {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: -58px;
   margin-bottom: 22px;
   position: relative;
+}
+.student-data-tools {
+  margin-top: 0;
 }
 .hero {
   height: 168px;

@@ -521,8 +521,12 @@ async function students() {
       "Complete la información del estudiante y del responsable.",
       "Estudiantes",
     )}
-    <div class="page-tools">
+    <div class="page-tools student-data-tools">
+      <a class="btn outline" href="./ejemplos/datos-demostracion.json" download="datos-demostracion.json">${icon("file-down", 18)} Descargar ejemplo</a>
+      ${actionButton("import-data", "Importar archivo", "file-up", "outline")}
+      ${actionButton("export-data", "Exportar todo", "download", "outline")}
       ${actionButton("new-student", "Registrar estudiante", "user-round-plus")}
+      <input id="import-data-file" type="file" accept=".json,application/json" hidden />
     </div>
     ${form}${card(
       "Estudiantes registrados",
@@ -1329,6 +1333,23 @@ function printSection(title, body) {
 async function handleAction(button) {
   const action = button.dataset.action,
     id = button.dataset.id;
+  if (action === "import-data") {
+    document.querySelector("#import-data-file").click();
+    return;
+  }
+  if (action === "export-data") {
+    const data = await api("/data/export");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `matriculas-y-estudiantes-${today()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify("Archivo exportado", `${data.students.length} estudiantes y sus registros relacionados.`);
+    return;
+  }
   if (action === "logout") {
     await api("/logout", { method: "POST" });
     state.user = null;
@@ -1539,6 +1560,22 @@ document.addEventListener("click", async (event) => {
 });
 document.addEventListener("change", async (event) => {
   const el = event.target;
+  if (el.id === "import-data-file") {
+    const file = el.files?.[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const result = await api("/data/import", { method: "POST", body: data });
+      state.selectedStudent = null;
+      notify("Archivo importado", `${result.students} estudiantes, ${result.payments} pagos y ${result.documents} documentos agregados.`);
+      await refresh();
+    } catch (error) {
+      notify("No se pudo importar", error instanceof SyntaxError ? "El archivo no contiene JSON válido." : error.message, "error");
+    } finally {
+      el.value = "";
+    }
+    return;
+  }
   if (
     el.name === "selected_student" ||
     (el.name === "student_id" &&

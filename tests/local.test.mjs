@@ -263,3 +263,41 @@ test("diccionario: prematrícula, cargos, pagos, descuentos, cuenta y anulacione
   });
   assert.equal((await api(`/charges?student_id=${studentId}`)).find((c) => c.id === zeroChargeId).amount_cents, 0);
 });
+
+test("archivo único: ejemplo, exportación completa e importación sin perder relaciones", async () => {
+  globalThis.localStorage = memory();
+  globalThis.sessionStorage = memory();
+  await api("/login", { method: "POST", body: { username: "directora", password: "Directora123!" } });
+  const example = JSON.parse(readFileSync("public/ejemplos/datos-demostracion.json", "utf8"));
+  const result = await api("/data/import", { method: "POST", body: example });
+  assert.equal(result.students, 12);
+  assert.equal(result.payments, 16);
+  assert.equal(result.documents, 60);
+  assert.equal(result.annulments, 1);
+  const exported = await api("/data/export");
+  assert.equal(exported.students.length, 12);
+  assert.equal(exported.guardians.length, 14);
+  assert.equal(exported.enrollments.length, 12);
+  assert.equal(exported.discounts.length, 2);
+  assert.equal(exported.annulments[0].payment_id, 6);
+  assert.ok(exported.documents.some((d) => d.file_data?.startsWith("data:text/plain;base64,")));
+  assert.ok(exported.enrollments.some((e) => e.monthly_amount_cents > 0));
+  assert.ok(exported.payments.some((p) => p.balance_after_cents > 0));
+
+  globalThis.localStorage = memory();
+  await api("/data/import", { method: "POST", body: exported });
+  const roundTrip = await api("/data/export");
+  for (const key of ["students", "guardians", "enrollments", "documents", "charges", "discounts", "payments", "annulments", "activity"])
+    assert.deepEqual(roundTrip[key], exported[key], key);
+  const damaged = structuredClone(exported);
+  damaged.payments[0].charge_id = 999999;
+  await assert.rejects(api("/data/import", { method: "POST", body: damaged }), /referencia inexistente/);
+  assert.equal((await api("/data/export")).students.length, 12);
+
+  await api("/data/import", { method: "POST", body: exported });
+  const merged = await api("/data/export");
+  assert.equal(merged.students.length, 24);
+  assert.equal(merged.payments.length, 32);
+  const addedPayment = merged.payments.find((p) => p.id > 16);
+  assert.ok(merged.charges.some((c) => c.id === addedPayment.charge_id && c.student_id === addedPayment.student_id));
+});

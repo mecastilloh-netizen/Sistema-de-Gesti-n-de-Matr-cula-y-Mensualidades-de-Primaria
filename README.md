@@ -15,6 +15,8 @@ Accesos de demostración:
 
 La aplicación inicia sin estudiantes ni pagos ficticios. Puede registrar estudiantes, responsables, prematrículas, matrículas, documentos, mensualidades, abonos y descuentos; también permite imprimir comprobantes y estados de cuenta.
 
+En **Estudiantes** están las opciones **Descargar ejemplo**, **Importar archivo** y **Exportar todo**. El ejemplo [datos-demostracion.json](public/ejemplos/datos-demostracion.json) contiene 12 estudiantes ficticios con responsables, matrículas, documentos, cargos, pagos completos y parciales, descuentos, saldos pendientes y una anulación. Importe ese único archivo JSON para mostrar los datos. La importación agrega los registros y conserva los existentes; si se importa dos veces, se agregan dos copias. La exportación descarga un único JSON con toda la información actual, incluidos los documentos adjuntos guardados en el archivo.
+
 El flujo del diccionario de datos incluye documentos recibidos durante la prematrícula, montos de matrícula y mensualidad por año, pagos parciales, descuentos autorizados, estado de cuenta detallado e historial de anulaciones. La matrícula directa y la confirmación de prematrícula requieren ambos montos; pueden ser cero. Las mensualidades creadas usan el monto establecido para esa matrícula.
 
 Para comprobar los recorridos locales, ejecute `npm test` si tiene Node instalado. Node se usa solo para las pruebas; la página sigue funcionando como sitio estático.

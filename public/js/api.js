@@ -1,4 +1,5 @@
 // Almacenamiento de demostración: los datos y los roles se controlan en este navegador.
+import { exportData, mergeData } from "./data-transfer.js";
 const KEY = "primaria_datos_v1",
   SESSION = "primaria_sesion_v1";
 const fresh = () => ({
@@ -237,6 +238,8 @@ export async function api(path, options = {}) {
       return result;
     };
   let m;
+  if (route === "/data/export" && method === "GET") return exportData(db);
+  if (route === "/data/import" && method === "POST") return done(mergeData(db, b));
   if (route === "/dashboard" && method === "GET") {
     const year = Number(url.searchParams.get("year")) || yearNow(),
       valid = db.payments.filter((p) => p.status === "Válido");
